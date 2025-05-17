@@ -20,26 +20,26 @@ ids_file = root + '/train/ids.txt'
 
 # Find all training ids from the ids.txt file in train/
 # This is bound to change as custom splits will be needed.
-with open(ids_file, 'r') as f:
-    ids = set(line.strip() for line in f)
+if not os.path.exists(filtered_annotations):
+    print('Creating a new .json file for training ids.')
+    with open(ids_file, 'r') as f:
+        ids = set(line.strip() for line in f)
 
-with open(annotations, 'r') as f:
-    annos = json.load(f)
+    with open(annotations, 'r') as f:
+        annos = json.load(f)
 
-# Filter annotations file for training ids only
-filtered_imgs = {img_id: img_data
-                 for img_id, img_data in annos['imgs'].items()
-                 if img_id in ids}
+    # Filter annotations file for training ids only
+    filtered_imgs = {img_id: img_data
+                     for img_id, img_data in annos['imgs'].items()
+                     if img_id in ids}
 
-train_annotations = {
-    'types': annos['types'],
-    'imgs': filtered_imgs
-}
+    train_annotations = {
+        'types': annos['types'],
+        'imgs': filtered_imgs
+    }
 
-print(len(train_annotations['imgs']))
-
-with open(filtered_annotations, 'w') as f:
-    json.dump(train_annotations, f, indent=4)
+    with open(filtered_annotations, 'w') as f:
+        json.dump(train_annotations, f, indent=4)
 
 # Train split and validation split should be decided later,
 # these are just values for now

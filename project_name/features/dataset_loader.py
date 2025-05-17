@@ -16,10 +16,10 @@ class TT100KDataset(Dataset):
         return len(self.annotations['imgs'])
 
     def __getitem__(self, idx):
-        entry = self.annotations['imgs'].values()[idx]
+        entry = self.annotations['imgs'][idx]
         img_path = os.path.join(self.root_dir, entry['path'])
-        #image = Image.open(img_path).convert('RGB')
-        preprocessed_image = preprocess(img_path)
+        # image = Image.open(img_path).convert('RGB')
+        image = preprocess_image(img_path)
         if self.transform:
-            image = self.transform(preprocessed_image)
+            image = self.transform(image)
         return image
