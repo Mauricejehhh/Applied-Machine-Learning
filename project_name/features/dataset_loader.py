@@ -1,7 +1,8 @@
 import os
-from torch.utils.data import Dataset
 import json
 from PIL import Image
+from torch.utils.data import Dataset
+from .preprocessing import preprocess_image
 
 
 class TT100KDataset(Dataset):
@@ -17,7 +18,8 @@ class TT100KDataset(Dataset):
     def __getitem__(self, idx):
         entry = self.annotations['imgs'].values()[idx]
         img_path = os.path.join(self.root_dir, entry['path'])
-        image = Image.open(img_path).convert('RGB')
+        #image = Image.open(img_path).convert('RGB')
+        preprocessed_image = preprocess(img_path)
         if self.transform:
-            image = self.transform(image)
+            image = self.transform(preprocessed_image)
         return image
