@@ -53,7 +53,7 @@ if __name__ == "__main__":
             print(f"Amount of Traffic Signs: {len(traffic_signs)}")
 
             # Loop over Traffic Signs and print their type & bounding box
-            for i in range(traffic_signs):
+            for i in range(len(traffic_signs)):
                 bbox = traffic_signs[i]["bbox"]
                 xmin = bbox["xmin"] / 4  # Divide by 4 to account for resizing (2048 --> 512)
                 ymin = bbox["ymin"] / 4

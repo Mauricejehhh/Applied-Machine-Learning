@@ -5,6 +5,9 @@ Make sure this is the case, otherwise it will not work.
 """
 import os
 import json
+import matplotlib.pyplot as plt
+import numpy as np
+import torchvision
 from models.base_model_cnn import CNNClassifier
 from features.dataset_loader import TT100KDataset
 from torch.utils.data import random_split, DataLoader
@@ -49,9 +52,28 @@ v_size = len(tt100k_data) - t_size
 
 # Initialize data loaders for testing and validations sets
 train_split, val_split = random_split(tt100k_data, [t_size, v_size])
-t_loader = DataLoader(tt100k_data, 32, shuffle=True)
-v_loader = DataLoader(tt100k_data, 32, shuffle=True)
+t_loader = DataLoader(tt100k_data, 4, shuffle=True)
+v_loader = DataLoader(tt100k_data, 4, shuffle=True)
 
 # Initialize model, optimizer etc.
 num_of_classes = len(tt100k_data.annotations['types'])
 model = CNNClassifier(num_of_classes)
+
+
+# Temporary function for plotting
+def matplotlib_imshow(img, one_channel=False):
+    if one_channel:
+        img = img.mean(dim=0)
+    if one_channel:
+        plt.imshow(img, cmap="Greys")
+    else:
+        plt.imshow(np.transpose(img, (1, 2, 0)))
+    plt.show()
+
+
+dataiter = iter(t_loader)
+images = next(dataiter)
+
+# Create a grid from the images and show them
+img_grid = torchvision.utils.make_grid(images)
+matplotlib_imshow(img_grid, one_channel=True)

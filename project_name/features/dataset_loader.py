@@ -9,6 +9,7 @@ class TT100KDataset(Dataset):
     def __init__(self, annotations_file, root_dir, transform=None):
         with open(annotations_file, 'r') as f:
             self.annotations = json.load(f)
+        self.image_ids = list(self.annotations['imgs'].keys())
         self.root_dir = root_dir
         self.transform = transform
 
@@ -16,7 +17,8 @@ class TT100KDataset(Dataset):
         return len(self.annotations['imgs'])
 
     def __getitem__(self, idx):
-        entry = self.annotations['imgs'][idx]
+        img_id = self.image_ids[idx]
+        entry = self.annotations['imgs'][img_id]
         img_path = os.path.join(self.root_dir, entry['path'])
         # image = Image.open(img_path).convert('RGB')
         image = preprocess_image(img_path)
