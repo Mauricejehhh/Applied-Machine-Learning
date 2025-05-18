@@ -7,9 +7,17 @@ import os
 
 
 def preprocess_image(img_path):
-    """Function derived from previous commits of the preprocessing code.
-    This function is used in the dataset_loader.py torch.utils.data.Dataset
-    class that loads the TT100K data.
+    """Preprocess an image from the TT100K dataset.
+
+    This function performs grayscale conversion and resizing on a given image.
+    It is used by the dataset_loader.py `torch.utils.data.Dataset` class that
+    loads the TT100K data.
+
+    Args:
+        img_path (str): Path to the image file.
+
+    Returns:
+        numpy.ndarray: A resized grayscale image of shape (512, 512).
     """
     image = io.imread(img_path)
 
@@ -20,8 +28,11 @@ def preprocess_image(img_path):
     plt.imshow(gray_image, cmap='gray')
 
     # Resizing from 2048x2048 to 512x512
-    resized_image = resize(gray_image, (512, 512), anti_aliasing=True)  # Not sure if we're able to scale down further
+    resized_image = resize(
+        gray_image, (512, 512), anti_aliasing=True
+    )
     plt.imshow(resized_image, cmap='gray')
+
     return resized_image
 
 
@@ -33,33 +44,35 @@ if __name__ == "__main__":
 
     with open(dataset_pth + 'train/ids.txt') as f:
         for id in f:
-            id = id[:-1]  # Removes \n at the end of each id. Neither replace, strip, nor rstrip were working.
+            id = id.strip()  # Removes newline and whitespace
             img_path = 'train/' + str(id) + '.jpg'
             image = io.imread(dataset_pth + img_path)
 
-            # Grayscaling & Normalizing (Normalized within rgb2gray function)
+            # Grayscaling & Normalizing
             i, (im1) = plt.subplots(1)
             i.set_figwidth(5)
             gray_image = skimage.color.rgb2gray(image)
             plt.imshow(gray_image, cmap='gray')
 
-            # Resizing from 2048x2048 to 512x512
-            resized_image = resize(gray_image, (512, 512), anti_aliasing=True)  # Not sure if we're able to scale down further
+            # Resize from 2048x2048 to 512x512
+            resized_image = resize(
+                gray_image, (512, 512), anti_aliasing=True
+            )
             plt.imshow(resized_image, cmap='gray')
 
-            # Open annotations file
             print(f"\nCurrent Image: {id}")
             traffic_signs = annotations["imgs"][str(id)]["objects"]
             print(f"Amount of Traffic Signs: {len(traffic_signs)}")
 
-            # Loop over Traffic Signs and print their type & bounding box
             for i in range(len(traffic_signs)):
                 bbox = traffic_signs[i]["bbox"]
-                xmin = bbox["xmin"] / 4  # Divide by 4 to account for resizing (2048 --> 512)
+                xmin = bbox["xmin"] / 4
                 ymin = bbox["ymin"] / 4
                 xmax = bbox["xmax"] / 4
                 ymax = bbox["ymax"] / 4
                 sign_type = traffic_signs[i]["category"]
+
                 print(f"Traffic Sign Type: {sign_type}")
                 print(f"xmin: {xmin}\nymin: {ymin}\nxmax: {xmax}\nymax: {ymax}")
+
             plt.show()
