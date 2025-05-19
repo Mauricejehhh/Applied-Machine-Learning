@@ -8,8 +8,11 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 import torchvision
+import torch
+import torch.nn as nn
+import torch.optim as optim
 from models.base_model_cnn import CNNClassifier
-from features.dataset_loader import TT100KDataset
+from features.dataset_loader import TT100KDataset, TT100KSignDataset
 from torch.utils.data import random_split, DataLoader
 
 
@@ -46,7 +49,8 @@ if not os.path.exists(filtered_annotations):
 
 # Train split and validation split should be decided later,
 # these are just values for now
-tt100k_data = TT100KDataset(filtered_annotations, root)
+# tt100k_data = TT100KDataset(filtered_annotations, root)
+tt100k_data = TT100KSignDataset(filtered_annotations, root)
 t_size = int(0.8 * len(tt100k_data))
 v_size = len(tt100k_data) - t_size
 
@@ -55,25 +59,56 @@ train_split, val_split = random_split(tt100k_data, [t_size, v_size])
 t_loader = DataLoader(tt100k_data, 4, shuffle=True)
 v_loader = DataLoader(tt100k_data, 4, shuffle=True)
 
+# Initialize training loop parameters
+epochs = 1
+lr = 0.001
+
 # Initialize model, optimizer etc.
 num_of_classes = len(tt100k_data.annotations['types'])
 model = CNNClassifier(num_of_classes)
+loss_fn = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=lr)
 
 
-# Temporary function for plotting
 def matplotlib_imshow(img, one_channel=False):
     if one_channel:
         img = img.mean(dim=0)
+    img = img / 2 + 0.5     # unnormalize
+    npimg = img.numpy()
     if one_channel:
-        plt.imshow(img, cmap="Greys")
+        plt.imshow(npimg, cmap="Greys")
     else:
-        plt.imshow(np.transpose(img, (1, 2, 0)))
-    plt.show()
+        plt.imshow(np.transpose(npimg, (1, 2, 0)))
 
 
-dataiter = iter(t_loader)
-images = next(dataiter)
+for epoch in range(epochs):
+    # Set model to training mode
+    model.train()
+    running_tloss = 0.0
+    running_vloss = 0.0
 
-# Create a grid from the images and show them
-img_grid = torchvision.utils.make_grid(images)
-matplotlib_imshow(img_grid, one_channel=True)
+    for i, data in enumerate(t_loader):
+        inputs, labels = data
+        optimizer.zero_grad()
+        outputs = model(inputs)
+        img_grid = torchvision.utils.make_grid(inputs)
+        # matplotlib_imshow(img_grid, one_channel=True)
+        # plt.show()
+        t_loss = loss_fn(outputs, labels)
+        t_loss.backward()
+        running_tloss += t_loss.item()
+        optimizer.step()
+
+        if i % 10 == 0:
+            print(f'batch {i}: last loss: {running_tloss / 10}')
+            running_tloss = 0
+
+    # Set model to evaluation mode
+    model.eval()
+
+    with torch.no_grad():
+        for i, data in enumerate(v_loader):
+            inputs, labels = data
+            outputs = model(inputs)
+            loss = loss_fn(outputs, labels)
+            running_vloss += loss

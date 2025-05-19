@@ -1,27 +1,41 @@
 from skimage import io
 from skimage.transform import resize
+import torch
 import skimage
 import matplotlib.pyplot as plt
 import json
 import os
 
 
-def preprocess_image(img_path):
-    """Function derived from previous commits of the preprocessing code.
+def preprocess_and_crop_image(image, bbox):
+    # Grayscaling & Normalizing (Normalized within rgb2gray function)
+    gray_image = skimage.color.rgb2gray(image)
+    xmin = int(bbox["xmin"] / 4)
+    ymin = int(bbox["ymin"] / 4)
+    xmax = int(bbox["xmax"] / 4)
+    ymax = int(bbox["ymax"] / 4)
+
+    # Resizing from 2048x2048 to 512x512
+    resized_image = resize(gray_image, (512, 512), anti_aliasing=True)
+    resized_image = resized_image[ymin:ymax, xmin:xmax]
+    resized_image = resize(resized_image, (64, 64))
+    resized_image = torch.Tensor(resized_image)
+    resized_image = torch.stack([resized_image] * 3, axis=0)
+    return resized_image
+
+
+def preprocess_image(image):
+    """ Function derived from previous commits of the preprocessing code.
     This function is used in the dataset_loader.py torch.utils.data.Dataset
     class that loads the TT100K data.
     """
-    image = io.imread(img_path)
-
     # Grayscaling & Normalizing (Normalized within rgb2gray function)
-    i, (im1) = plt.subplots(1)
-    i.set_figwidth(5)
     gray_image = skimage.color.rgb2gray(image)
-    plt.imshow(gray_image, cmap='gray')
 
     # Resizing from 2048x2048 to 512x512
-    resized_image = resize(gray_image, (512, 512), anti_aliasing=True)  # Not sure if we're able to scale down further
-    plt.imshow(resized_image, cmap='gray')
+    resized_image = resize(gray_image, (512, 512), anti_aliasing=True)
+    resized_image = torch.Tensor(resized_image)
+    resized_image = torch.stack([resized_image] * 3, axis=0)
     return resized_image
 
 
