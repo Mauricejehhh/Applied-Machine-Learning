@@ -11,6 +11,7 @@ import torchvision
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from tqdm import tqdm
 from models.base_model_cnn import CNNClassifier
 from features.dataset_loader import TT100KDataset, TT100KSignDataset
 from torch.utils.data import random_split, DataLoader
@@ -56,16 +57,17 @@ v_size = len(tt100k_data) - t_size
 
 # Initialize data loaders for testing and validations sets
 train_split, val_split = random_split(tt100k_data, [t_size, v_size])
-t_loader = DataLoader(tt100k_data, 4, shuffle=True)
-v_loader = DataLoader(tt100k_data, 4, shuffle=True)
+t_loader = DataLoader(tt100k_data, 32, shuffle=True)
+v_loader = DataLoader(tt100k_data, 32, shuffle=True)
 
 # Initialize training loop parameters
 epochs = 1
 lr = 0.001
 
 # Initialize model, optimizer etc.
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 num_of_classes = len(tt100k_data.annotations['types'])
-model = CNNClassifier(num_of_classes)
+model = CNNClassifier(num_of_classes).to(device)
 loss_fn = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=lr)
 
@@ -82,13 +84,16 @@ def matplotlib_imshow(img, one_channel=False):
 
 
 for epoch in range(epochs):
+    print(f'Epoch [{epoch}/{epochs}]')
     # Set model to training mode
     model.train()
     running_tloss = 0.0
     running_vloss = 0.0
 
-    for i, data in enumerate(t_loader):
+    for i, data in enumerate(tqdm(t_loader)):
         inputs, labels = data
+        inputs = inputs.to(device)
+        labels = labels.to(device)
         optimizer.zero_grad()
         outputs = model(inputs)
         img_grid = torchvision.utils.make_grid(inputs)
