@@ -1,65 +1,105 @@
-from skimage import io
-from skimage.transform import resize
-import skimage
-import matplotlib.pyplot as plt
-import json
 import os
+import json
+from typing import Any, Dict, List
+import matplotlib.pyplot as plt
+from skimage import io, color
+from skimage.transform import resize
+import numpy as np
 
 
-def preprocess_image(img_path):
-    """Function derived from previous commits of the preprocessing code.
-    This function is used in the dataset_loader.py torch.utils.data.Dataset
-    class that loads the TT100K data.
+def preprocess_image(img_path: str) -> np.ndarray:
+    """Preprocess an image from the TT100K dataset.
+
+    This function loads an image, converts it to grayscale, and resizes it.
+
+    Args:
+        img_path (str): Path to the image file.
+
+    Returns:
+        np.ndarray: A resized grayscale image of shape (512, 512).
     """
     image = io.imread(img_path)
-
-    # Grayscaling & Normalizing (Normalized within rgb2gray function)
-    i, (im1) = plt.subplots(1)
-    i.set_figwidth(5)
-    gray_image = skimage.color.rgb2gray(image)
-    plt.imshow(gray_image, cmap='gray')
-
-    # Resizing from 2048x2048 to 512x512
-    resized_image = resize(gray_image, (512, 512), anti_aliasing=True)  # Not sure if we're able to scale down further
-    plt.imshow(resized_image, cmap='gray')
+    gray_image = color.rgb2gray(image)
+    resized_image = resize(gray_image, (512, 512), anti_aliasing=True)
     return resized_image
 
 
-if __name__ == "__main__":
-    dataset_pth = os.getcwd() + '/project_name/data/tt100k_2021/'
+class TT100KVisualizer:
+    """Visualizes and processes images from the TT100K dataset."""
 
-    with open(dataset_pth + 'annotations_all.json') as json_data:
-        annotations = json.load(json_data)
+    def __init__(self, dataset_path: str) -> None:
+        """
+        Initializes the TT100KVisualizer.
 
-    with open(dataset_pth + 'train/ids.txt') as f:
-        for id in f:
-            id = id[:-1]  # Removes \n at the end of each id. Neither replace, strip, nor rstrip were working.
-            img_path = 'train/' + str(id) + '.jpg'
-            image = io.imread(dataset_pth + img_path)
+        Args:
+            dataset_path (str): Base path to the TT100K dataset.
+        """
+        self.dataset_path = dataset_path
+        self.annotations = self._load_annotations()
+        self.image_ids = self._load_image_ids()
 
-            # Grayscaling & Normalizing (Normalized within rgb2gray function)
-            i, (im1) = plt.subplots(1)
-            i.set_figwidth(5)
-            gray_image = skimage.color.rgb2gray(image)
-            plt.imshow(gray_image, cmap='gray')
+    def _load_annotations(self) -> Dict[str, Any]:
+        """
+        Loads the annotation JSON.
 
-            # Resizing from 2048x2048 to 512x512
-            resized_image = resize(gray_image, (512, 512), anti_aliasing=True)  # Not sure if we're able to scale down further
-            plt.imshow(resized_image, cmap='gray')
+        Returns:
+            Dict[str, Any]: Dictionary containing image annotations.
+        """
+        with open(
+                os.path.join(self.dataset_path, 'annotations_all.json')
+                ) as json_data:
+            return json.load(json_data)
 
-            # Open annotations file
-            print(f"\nCurrent Image: {id}")
-            traffic_signs = annotations["imgs"][str(id)]["objects"]
+    def _load_image_ids(self) -> List[str]:
+        """
+        Loads the image IDs from the text file.
+
+        Returns:
+            List[str]: List of image IDs.
+        """
+        ids_path = os.path.join(self.dataset_path, 'train/ids.txt')
+        with open(ids_path, 'r') as f:
+            return [line.strip() for line in f.readlines()]
+
+    def visualize(self) -> None:
+        """
+        Visualizes images and their corresponding traffic sign annotations.
+        """
+        for img_id in self.image_ids:
+            img_rel_path = f"train/{img_id}.jpg"
+            img_abs_path = os.path.join(self.dataset_path, img_rel_path)
+
+            gray_resized_image = preprocess_image(img_abs_path)
+
+            # Display processed image
+            fig, ax = plt.subplots()
+            fig.set_figwidth(5)
+            ax.imshow(gray_resized_image, cmap='gray')
+            ax.set_title(f"Image ID: {img_id}")
+
+            # Print and show traffic sign information
+            traffic_signs = self.annotations["imgs"][img_id]["objects"]
+            print(f"\nCurrent Image: {img_id}")
             print(f"Amount of Traffic Signs: {len(traffic_signs)}")
 
-            # Loop over Traffic Signs and print their type & bounding box
-            for i in range(len(traffic_signs)):
-                bbox = traffic_signs[i]["bbox"]
-                xmin = bbox["xmin"] / 4  # Divide by 4 to account for resizing (2048 --> 512)
+            for sign in traffic_signs:
+                bbox = sign["bbox"]
+                xmin = bbox["xmin"] / 4
                 ymin = bbox["ymin"] / 4
                 xmax = bbox["xmax"] / 4
                 ymax = bbox["ymax"] / 4
-                sign_type = traffic_signs[i]["category"]
+                sign_type = sign["category"]
+
                 print(f"Traffic Sign Type: {sign_type}")
-                print(f"xmin: {xmin}\nymin: {ymin}\nxmax: {xmax}\nymax: {ymax}")
+                print(f"xmin: {xmin}")
+                print(f"ymin: {ymin}")
+                print(f"xmax: {xmax}")
+                print(f"ymax: {ymax}")
+
             plt.show()
+
+
+if __name__ == "__main__":
+    dataset_path = os.path.join(os.getcwd(), 'project_name/data/tt100k_2021')
+    visualizer = TT100KVisualizer(dataset_path)
+    visualizer.visualize()
