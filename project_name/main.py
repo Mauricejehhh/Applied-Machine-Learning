@@ -24,7 +24,7 @@ root = os.getcwd() + '/project_name/data/tt100k_2021/'
 annotations = root + 'annotations_all.json'
 filtered_annotations = root + 'filtered_annotations.json'
 ids_file = root + '/train/ids.txt'
-model_path = './models'
+model_path = os.getcwd() + '/project_name/models/model.pth'
 
 # Find all training ids from the ids.txt file in train/
 # This is bound to change as custom splits will be needed.
@@ -58,6 +58,7 @@ v_size = len(tt100k_data) - t_size
 
 # Initialize data loaders for testing and validations sets
 train_split, val_split = random_split(tt100k_data, [t_size, v_size])
+# t_small, v_small = random_split(tt100k_data, [100, len(tt100k_data) - 100])
 t_loader = DataLoader(train_split, 32, shuffle=True)
 v_loader = DataLoader(val_split, 32, shuffle=True)
 
@@ -66,6 +67,7 @@ epochs = 1
 lr = 0.001
 
 # Initialize model, optimizer etc.
+print(f'Cuda (GPU support) available: {torch.cuda.is_available()}')
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 num_of_classes = len(tt100k_data.annotations['types'])
 model = CNNClassifier(num_of_classes)
@@ -114,16 +116,18 @@ for epoch in range(epochs):
     model.eval()
 
     with torch.no_grad():
-        for i, data in enumerate(v_loader):
+        for i, data in enumerate(tqdm(v_loader)):
             inputs, labels = data
             inputs = inputs.to(device)
             labels = labels.to(device)
             outputs = model(inputs)
             loss = loss_fn(outputs, labels)
             running_vloss += loss
+        avg_loss = running_vloss / len(v_loader)
+        print(f'Average validation loss: {avg_loss:.4f}')
 
 torch.save(model.state_dict(), model_path)
-
+print(f'Saved model to: {model_path}')
 # Loading a model:
 # new_model = CNNClassifier(num_of_classes)
 # m_state_dict = torch.load(model_path)
