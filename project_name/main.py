@@ -24,6 +24,7 @@ root = os.getcwd() + '/project_name/data/tt100k_2021/'
 annotations = root + 'annotations_all.json'
 filtered_annotations = root + 'filtered_annotations.json'
 ids_file = root + '/train/ids.txt'
+model_path = './models'
 
 # Find all training ids from the ids.txt file in train/
 # This is bound to change as custom splits will be needed.
@@ -57,8 +58,8 @@ v_size = len(tt100k_data) - t_size
 
 # Initialize data loaders for testing and validations sets
 train_split, val_split = random_split(tt100k_data, [t_size, v_size])
-t_loader = DataLoader(tt100k_data, 32, shuffle=True)
-v_loader = DataLoader(tt100k_data, 32, shuffle=True)
+t_loader = DataLoader(train_split, 32, shuffle=True)
+v_loader = DataLoader(val_split, 32, shuffle=True)
 
 # Initialize training loop parameters
 epochs = 1
@@ -67,7 +68,8 @@ lr = 0.001
 # Initialize model, optimizer etc.
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 num_of_classes = len(tt100k_data.annotations['types'])
-model = CNNClassifier(num_of_classes).to(device)
+model = CNNClassifier(num_of_classes)
+model = model.to(device)
 loss_fn = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=lr)
 
@@ -84,7 +86,7 @@ def matplotlib_imshow(img, one_channel=False):
 
 
 for epoch in range(epochs):
-    print(f'Epoch [{epoch}/{epochs}]')
+    print(f'Epoch [{epoch + 1}/{epochs}]')
     # Set model to training mode
     model.train()
     running_tloss = 0.0
@@ -105,7 +107,7 @@ for epoch in range(epochs):
         optimizer.step()
 
         if i % 10 == 0:
-            print(f'batch {i}: last loss: {running_tloss / 10}')
+            print(f'\n batch {i}: last loss: {running_tloss / 10}')
             running_tloss = 0
 
     # Set model to evaluation mode
@@ -114,6 +116,16 @@ for epoch in range(epochs):
     with torch.no_grad():
         for i, data in enumerate(v_loader):
             inputs, labels = data
+            inputs = inputs.to(device)
+            labels = labels.to(device)
             outputs = model(inputs)
             loss = loss_fn(outputs, labels)
             running_vloss += loss
+
+torch.save(model.state_dict(), model_path)
+
+# Loading a model:
+# new_model = CNNClassifier(num_of_classes)
+# m_state_dict = torch.load(model_path)
+# new_model = new_model.to(device)
+# new_model.load_state_dict(m_state_dict)
