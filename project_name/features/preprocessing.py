@@ -1,15 +1,32 @@
 import os
 import json
-from typing import Any, Dict, List
+import torch
 import matplotlib.pyplot as plt
+import numpy as np
+from typing import Any, Dict, List
 from skimage import io, color
 from skimage.transform import resize
-import numpy as np
+
+
+def preprocess_and_crop_image(image, bbox):
+    # Grayscaling & Normalizing (Normalized within rgb2gray function)
+    gray_image = skimage.color.rgb2gray(image)
+    xmin = int(bbox["xmin"] / 4)
+    ymin = int(bbox["ymin"] / 4)
+    xmax = int(bbox["xmax"] / 4)
+    ymax = int(bbox["ymax"] / 4)
+
+    # Resizing from 2048x2048 to 512x512
+    resized_image = resize(gray_image, (512, 512), anti_aliasing=True)
+    resized_image = resized_image[ymin:ymax, xmin:xmax]
+    resized_image = resize(resized_image, (64, 64))
+    resized_image = torch.Tensor(resized_image)
+    resized_image = torch.stack([resized_image] * 3, axis=0)
+    return resized_image
 
 
 def preprocess_image(img_path: str) -> np.ndarray:
-    """Preprocess an image from the TT100K dataset.
-
+    """ Preprocess an image from the TT100K dataset.
     This function loads an image, converts it to grayscale, and resizes it.
 
     Args:
@@ -18,18 +35,20 @@ def preprocess_image(img_path: str) -> np.ndarray:
     Returns:
         np.ndarray: A resized grayscale image of shape (512, 512).
     """
-    image = io.imread(img_path)
+    # Grayscaling & Normalizing (Normalized within rgb2gray function)
     gray_image = color.rgb2gray(image)
+
+    # Resizing from 2048x2048 to 512x512
     resized_image = resize(gray_image, (512, 512), anti_aliasing=True)
+    resized_image = torch.Tensor(resized_image)
+    resized_image = torch.stack([resized_image] * 3, axis=0)
     return resized_image
 
-
+  
 class TT100KVisualizer:
     """Visualizes and processes images from the TT100K dataset."""
-
     def __init__(self, dataset_path: str) -> None:
-        """
-        Initializes the TT100KVisualizer.
+        """ Initializes the TT100KVisualizer.
 
         Args:
             dataset_path (str): Base path to the TT100K dataset.
@@ -39,8 +58,7 @@ class TT100KVisualizer:
         self.image_ids = self._load_image_ids()
 
     def _load_annotations(self) -> Dict[str, Any]:
-        """
-        Loads the annotation JSON.
+        """ Loads the annotation JSON.
 
         Returns:
             Dict[str, Any]: Dictionary containing image annotations.
@@ -51,8 +69,7 @@ class TT100KVisualizer:
             return json.load(json_data)
 
     def _load_image_ids(self) -> List[str]:
-        """
-        Loads the image IDs from the text file.
+        """ Loads the image IDs from the text file.
 
         Returns:
             List[str]: List of image IDs.
@@ -62,9 +79,7 @@ class TT100KVisualizer:
             return [line.strip() for line in f.readlines()]
 
     def visualize(self) -> None:
-        """
-        Visualizes images and their corresponding traffic sign annotations.
-        """
+        """ Visualizes images and their corresponding traffic sign annotations. """
         for img_id in self.image_ids:
             img_rel_path = f"train/{img_id}.jpg"
             img_abs_path = os.path.join(self.dataset_path, img_rel_path)
