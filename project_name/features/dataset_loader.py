@@ -1,16 +1,28 @@
 import os
 import json
 import torch
-from PIL import Image
 from torch.utils.data import Dataset
+from PIL import Image
+from typing import Optional, Callable, Any
 from .preprocessing import preprocess_image, preprocess_and_crop_image
 
 
 class TT100KDataset(Dataset):
-    """ Torch Dataset Class for the original TT100K data.
-    Images returns from __getitem__() are the grayscaled 512x512 images.
-    """
-    def __init__(self, annotations_file, root_dir, transform=None):
+    """Custom dataset for the TT100K traffic sign dataset."""
+
+    def __init__(self,
+                 annotations_file: str,
+                 root_dir: str,
+                 transform: Optional[Callable] = None):
+        """
+        Initializes the TT100KDataset.
+
+        Args:
+            annotations_file (str): Path to the JSON file with annotations.
+            root_dir (str): Directory with all the images.
+            transform (Optional[Callable], optional): Optional transform to be
+            applied on a sample. Defaults to None.
+        """
         with open(annotations_file, 'r') as f:
             self.annotations = json.load(f)
         self.image_ids = list(self.annotations['imgs'].keys())
@@ -19,10 +31,21 @@ class TT100KDataset(Dataset):
         self.class_to_idx = {cls: idx for idx, cls in
                              enumerate(self.annotations['types'])}
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """
+        Returns:
+            int: Number of images in the dataset.
+        """
         return len(self.annotations['imgs'])
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Any:
+        """
+        Args:
+            idx (int): Index of the image to retrieve.
+
+        Returns:
+            Any: Transformed image sample.
+        """
         img_id = self.image_ids[idx]
         entry = self.annotations['imgs'][img_id]
         img_path = os.path.join(self.root_dir, entry['path'])
