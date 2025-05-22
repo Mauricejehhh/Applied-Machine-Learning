@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import Dataset
 from PIL import Image
 from typing import Optional, Callable, Any
-from .preprocessing import preprocess_image, preprocess_and_crop_image
+from .preprocessing import preprocess_image
 
 
 class TT100KDataset(Dataset):
@@ -72,7 +72,8 @@ class TT100KSignDataset(Dataset):
         self.root_dir = root_dir
         self.transform = transform
         self.labels = sorted(self.annotations["types"])
-        self.label_map = {label: idx for idx, label in enumerate(self.labels)}
+        self.label_to_idx = {label: idx for idx, label in enumerate(self.labels)}
+        self.idx_to_label = {idx: label for idx, label in enumerate(self.labels)}
         self.data = []
 
         for img_id, img_data in self.annotations['imgs'].items():
@@ -95,11 +96,13 @@ class TT100KSignDataset(Dataset):
         img_path = entry['img_path']
 
         bbox = entry["bbox"]
-
         image = Image.open(img_path).convert('RGB')
-        image = preprocess_and_crop_image(image, bbox)
-        image = torch.Tensor(image)
 
         if self.transform:
-            image = self.transform(image)
-        return image, self.label_map[entry['category']]
+            xmin = int(bbox["xmin"])
+            ymin = int(bbox["ymin"])
+            xmax = int(bbox["xmax"])
+            ymax = int(bbox["ymax"])
+            cropped_image = image.crop((xmin, ymin, xmax, ymax))
+            image = self.transform(cropped_image)
+        return image, self.label_to_idx[entry['category']]
