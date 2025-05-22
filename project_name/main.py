@@ -5,16 +5,29 @@ Make sure this is the case, otherwise it will not work.
 """
 import os
 import json
+import time
 import matplotlib.pyplot as plt
 import numpy as np
 import torchvision
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torchvision import transforms
 from tqdm import tqdm
 from models.base_model_cnn import CNNClassifier
 from features.dataset_loader import TT100KDataset, TT100KSignDataset
 from torch.utils.data import random_split, DataLoader
+
+
+def matplotlib_imshow(img, one_channel=False):
+    if one_channel:
+        img = img.mean(dim=0)
+    img = img / 2 + 0.5     # unnormalize
+    npimg = img.numpy()
+    if one_channel:
+        plt.imshow(npimg, cmap="Greys")
+    else:
+        plt.imshow(np.transpose(npimg, (1, 2, 0)))
 
 
 # These work for me, I am unsure whether they could work for you.
@@ -52,7 +65,14 @@ if not os.path.exists(filtered_annotations):
 # Train split and validation split should be decided later,
 # these are just values for now
 # tt100k_data = TT100KDataset(filtered_annotations, root)
-tt100k_data = TT100KSignDataset(filtered_annotations, root)
+transforms = transforms.Compose([
+    transforms.Grayscale(num_output_channels=3),
+    transforms.Resize((64, 64)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.5], std=[0.5]),
+])
+
+tt100k_data = TT100KSignDataset(filtered_annotations, root, transforms)
 t_size = int(0.8 * len(tt100k_data))
 v_size = len(tt100k_data) - t_size
 
@@ -75,18 +95,6 @@ model = model.to(device)
 loss_fn = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=lr)
 
-
-def matplotlib_imshow(img, one_channel=False):
-    if one_channel:
-        img = img.mean(dim=0)
-    img = img / 2 + 0.5     # unnormalize
-    npimg = img.numpy()
-    if one_channel:
-        plt.imshow(npimg, cmap="Greys")
-    else:
-        plt.imshow(np.transpose(npimg, (1, 2, 0)))
-
-
 for epoch in range(epochs):
     print(f'Epoch [{epoch + 1}/{epochs}]')
     # Set model to training mode
@@ -100,7 +108,7 @@ for epoch in range(epochs):
         labels = labels.to(device)
         optimizer.zero_grad()
         outputs = model(inputs)
-        img_grid = torchvision.utils.make_grid(inputs)
+        # img_grid = torchvision.utils.make_grid(inputs)
         # matplotlib_imshow(img_grid, one_channel=True)
         # plt.show()
         t_loss = loss_fn(outputs, labels)
@@ -129,8 +137,19 @@ for epoch in range(epochs):
 torch.save(model.state_dict(), model_path)
 print(f'Saved model to: {model_path}')
 
-# Loading a model:
+# # Loading a model:
 # new_model = CNNClassifier(num_of_classes)
-# m_state_dict = torch.load(model_path)
+# m_state_dict = torch.load(model_path, weights_only=True)
 # new_model = new_model.to(device)
 # new_model.load_state_dict(m_state_dict)
+
+# # Dumb testing thing:
+# dataiter = iter(t_loader)
+# images, labels = next(dataiter)
+# img_grid = torchvision.utils.make_grid(images)
+# matplotlib_imshow(img_grid, one_channel=True)
+# plt.show()
+# outputs = new_model(images)
+# _, predicted = torch.max(outputs, 1)
+# print(f'Ground truth: {[tt100k_data.idx_to_label[label.item()] for label in labels]}')
+# print(f'Predicted: {[tt100k_data.idx_to_label[pred.item()] for pred in predicted]}')
