@@ -128,6 +128,7 @@ for epoch in range(epochs):
 
 torch.save(model.state_dict(), model_path)
 print(f'Saved model to: {model_path}')
+
 # Loading a model:
 # new_model = CNNClassifier(num_of_classes)
 # m_state_dict = torch.load(model_path)

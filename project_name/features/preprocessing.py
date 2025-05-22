@@ -6,11 +6,12 @@ import numpy as np
 from typing import Any, Dict, List
 from skimage import io, color
 from skimage.transform import resize
+from matplotlib import patches
 
 
 def preprocess_and_crop_image(image, bbox):
     # Grayscaling & Normalizing (Normalized within rgb2gray function)
-    gray_image = skimage.color.rgb2gray(image)
+    gray_image = color.rgb2gray(image)
     xmin = int(bbox["xmin"] / 4)
     ymin = int(bbox["ymin"] / 4)
     xmax = int(bbox["xmax"] / 4)
@@ -36,15 +37,14 @@ def preprocess_image(img_path: str) -> np.ndarray:
         np.ndarray: A resized grayscale image of shape (512, 512).
     """
     # Grayscaling & Normalizing (Normalized within rgb2gray function)
+    image = io.imread(img_path)
     gray_image = color.rgb2gray(image)
 
     # Resizing from 2048x2048 to 512x512
     resized_image = resize(gray_image, (512, 512), anti_aliasing=True)
-    resized_image = torch.Tensor(resized_image)
-    resized_image = torch.stack([resized_image] * 3, axis=0)
     return resized_image
 
-  
+
 class TT100KVisualizer:
     """Visualizes and processes images from the TT100K dataset."""
     def __init__(self, dataset_path: str) -> None:
@@ -79,7 +79,9 @@ class TT100KVisualizer:
             return [line.strip() for line in f.readlines()]
 
     def visualize(self) -> None:
-        """ Visualizes images and their corresponding traffic sign annotations. """
+        """ Visualizes images and their corresponding traffic
+        sign annotations.
+        """
         for img_id in self.image_ids:
             img_rel_path = f"train/{img_id}.jpg"
             img_abs_path = os.path.join(self.dataset_path, img_rel_path)
@@ -92,25 +94,40 @@ class TT100KVisualizer:
             ax.imshow(gray_resized_image, cmap='gray')
             ax.set_title(f"Image ID: {img_id}")
 
-            # Print and show traffic sign information
-            traffic_signs = self.annotations["imgs"][img_id]["objects"]
             print(f"\nCurrent Image: {img_id}")
-            print(f"Amount of Traffic Signs: {len(traffic_signs)}")
 
-            for sign in traffic_signs:
-                bbox = sign["bbox"]
-                xmin = bbox["xmin"] / 4
-                ymin = bbox["ymin"] / 4
-                xmax = bbox["xmax"] / 4
-                ymax = bbox["ymax"] / 4
-                sign_type = sign["category"]
+            traffic_signs = None
+            # Print and show traffic sign information
+            if img_id in self.annotations['imgs'].keys():
+                traffic_signs = self.annotations["imgs"][img_id]["objects"]
+                print(f"Amount of Traffic Signs: {len(traffic_signs)}")
 
-                print(f"Traffic Sign Type: {sign_type}")
-                print(f"xmin: {xmin}")
-                print(f"ymin: {ymin}")
-                print(f"xmax: {xmax}")
-                print(f"ymax: {ymax}")
-
+            if traffic_signs is None:
+                print('Image ID was not found in the annotations file'
+                      ' or no bounding boxes exist.')
+            else:
+                for sign in traffic_signs:
+                    bbox = sign["bbox"]
+                    xmin = bbox["xmin"] / 4
+                    ymin = bbox["ymin"] / 4
+                    xmax = bbox["xmax"] / 4
+                    ymax = bbox["ymax"] / 4
+                    sign_type = sign["category"]
+                    print(f"Traffic Sign Type: {sign_type}")
+                    print(f"xmin: {xmin}")
+                    print(f"ymin: {ymin}")
+                    print(f"xmax: {xmax}")
+                    print(f"ymax: {ymax}")
+                    # Draw bbox onto image
+                    bbox_patch = patches.Rectangle(
+                        (xmin, ymin),
+                        (xmax - xmin),
+                        (ymax - ymin),
+                        linewidth=1,
+                        edgecolor='red',
+                        facecolor='none'
+                    )
+                    ax.add_patch(bbox_patch)
             plt.show()
 
 
