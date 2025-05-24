@@ -13,7 +13,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision import transforms
 from tqdm import tqdm
-from project_name.models.base_model_cnn import CNNClassifier
+from project_name.models.classification_base_model import CNNClassifier
 from project_name.data.dataset_loader import TT100KDataset, TT100KSignDataset
 from torch.utils.data import random_split, DataLoader
 
@@ -63,7 +63,6 @@ if not os.path.exists(filtered_annotations):
 
 # Train split and validation split should be decided later,
 # these are just values for now
-# tt100k_data = TT100KDataset(filtered_annotations, root)
 transforms = transforms.Compose([
     transforms.Grayscale(num_output_channels=3),
     transforms.Resize((64, 64)),
@@ -71,6 +70,7 @@ transforms = transforms.Compose([
     transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
 ])
 
+# tt100k_data = TT100KDataset(filtered_annotations, root)
 tt100k_data = TT100KSignDataset(filtered_annotations, root, transforms)
 t_size = int(0.8 * len(tt100k_data))
 v_size = len(tt100k_data) - t_size
@@ -106,9 +106,9 @@ for epoch in range(epochs):
         labels = labels.to(device)
         optimizer.zero_grad()
         outputs = model(inputs)
-        # img_grid = torchvision.utils.make_grid(inputs)
-        # matplotlib_imshow(img_grid, one_channel=True)
-        # plt.show()
+        #    img_grid = torchvision.utils.make_grid(inputs)
+        #    matplotlib_imshow(img_grid, one_channel=True)
+        #    plt.show()
         t_loss = loss_fn(outputs, labels)
         t_loss.backward()
         running_tloss += t_loss.item()

@@ -12,7 +12,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision import transforms
 from tqdm import tqdm
-from project_name.models.base_model_cnn import CNNClassifier
+from project_name.models.classification_base_model import CNNClassifier
 from project_name.data.dataset_loader import TT100KDataset, TT100KSignDataset
 from torch.utils.data import DataLoader, random_split
 
