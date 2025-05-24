@@ -4,7 +4,6 @@ import torch
 from torch.utils.data import Dataset
 from PIL import Image
 from typing import Optional, Callable, Any
-from .dataset_visualizer import preprocess_image
 
 
 class TT100KDataset(Dataset):
@@ -54,7 +53,10 @@ class TT100KDataset(Dataset):
 
         # Extract bounding box from first object
         bbox_dict = entry['objects'][0]['bbox']
-        bbox = [bbox_dict['xmin'], bbox_dict['ymin'], bbox_dict['xmax'], bbox_dict['ymax']]
+        bbox = [bbox_dict['xmin'],
+                bbox_dict['ymin'],
+                bbox_dict['xmax'],
+                bbox_dict['ymax']]
         bbox_tensor = torch.tensor(bbox, dtype=torch.float32)
 
         return image, bbox_tensor

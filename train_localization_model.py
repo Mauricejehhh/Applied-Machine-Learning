@@ -5,7 +5,6 @@ Applied-Machine-Learning/project_name/data/tt100k_2021
 """
 import os
 import json
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -32,7 +31,8 @@ if not os.path.exists(filtered_annotations):
         annos = json.load(f)
 
     filtered_imgs = {
-        img_id: img_data for img_id, img_data in annos['imgs'].items() if img_id in ids
+        img_id: img_data for img_id,
+        img_data in annos['imgs'].items() if img_id in ids
     }
 
     train_annotations = {
