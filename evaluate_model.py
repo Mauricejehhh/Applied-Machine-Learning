@@ -8,13 +8,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torchvision
 import torch
-import torch.nn as nn
-import torch.optim as optim
 from torchvision import transforms
 from tqdm import tqdm
 from project_name.models.classification_base_model import CNNClassifier
-from project_name.data.dataset_loader import TT100KDataset, TT100KSignDataset
-from torch.utils.data import DataLoader, random_split
+from project_name.data.dataset_loader import TT100KSignDataset
+from torch.utils.data import DataLoader
 
 
 def matplotlib_imshow(img, one_channel=False):
