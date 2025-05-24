@@ -4,4 +4,4 @@ __pycache__/
 .DS_Store
 venv/
 .env
-data
+data_storage
