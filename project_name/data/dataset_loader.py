@@ -72,8 +72,10 @@ class TT100KSignDataset(Dataset):
         self.root_dir = root_dir
         self.transform = transform
         self.labels = sorted(self.annotations["types"])
-        self.label_to_idx = {label: idx for idx, label in enumerate(self.labels)}
-        self.idx_to_label = {idx: label for idx, label in enumerate(self.labels)}
+        self.label_to_idx = {label: idx for idx,
+                             label in enumerate(self.labels)}
+        self.idx_to_label = {idx: label for idx,
+                             label in enumerate(self.labels)}
         self.data = []
 
         for img_id, img_data in self.annotations['imgs'].items():
