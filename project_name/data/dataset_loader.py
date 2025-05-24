@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import Dataset
 from PIL import Image
 from typing import Optional, Callable, Any
-from .preprocessing import preprocess_image
+from .dataset_visualizer import preprocess_image
 
 
 class TT100KDataset(Dataset):
