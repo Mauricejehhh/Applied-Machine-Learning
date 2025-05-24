@@ -7,8 +7,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision import transforms
 from tqdm import tqdm
-from .project_name.models.localization_base_model import CNNDetector
-from .project_name.data.dataset_loader import TT100KDataset
+from project_name.models.localization_base_model import CNNDetector
+from project_name.data.dataset_loader import TT100KDataset
 from torch.utils.data import random_split, DataLoader
 import torchvision.transforms.functional as TF
 import cv2
