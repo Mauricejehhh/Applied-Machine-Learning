@@ -39,26 +39,25 @@ class TT100KDataset(Dataset):
         return len(self.annotations['imgs'])
 
     def __getitem__(self, idx: int) -> Any:
-        """
-        Args:
-            idx (int): Index of the image to retrieve.
-
-        Returns:
-            Any: Transformed image sample.
-        """
         img_id = self.image_ids[idx]
         entry = self.annotations['imgs'][img_id]
+
         img_path = os.path.join(self.root_dir, entry['path'])
         image = Image.open(img_path).convert('RGB')
-        image = preprocess_image(image)
-        image = torch.Tensor(image)
-        labels = [self.class_to_idx[obj['category']]
-                  for obj in entry['objects']]
-        label_tensor = torch.zeros(len(self.class_to_idx))
-        label_tensor[labels] = 1
+
         if self.transform:
             image = self.transform(image)
-        return image, label_tensor
+
+        # Skip images without objects
+        if len(entry['objects']) == 0:
+            return self.__getitem__((idx + 1) % len(self))
+
+        # Extract bounding box from first object
+        bbox_dict = entry['objects'][0]['bbox']
+        bbox = [bbox_dict['xmin'], bbox_dict['ymin'], bbox_dict['xmax'], bbox_dict['ymax']]
+        bbox_tensor = torch.tensor(bbox, dtype=torch.float32)
+
+        return image, bbox_tensor
 
 
 class TT100KSignDataset(Dataset):

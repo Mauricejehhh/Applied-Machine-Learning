@@ -86,6 +86,7 @@ lr = 0.001
 print(f'Cuda (GPU support) available: {torch.cuda.is_available()}')
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 num_of_classes = len(tt100k_data.annotations['types'])
+
 model = CNNClassifier(num_of_classes)
 model = model.to(device)
 loss_fn = nn.CrossEntropyLoss()
