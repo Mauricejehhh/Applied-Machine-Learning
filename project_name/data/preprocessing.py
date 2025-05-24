@@ -1,29 +1,11 @@
 import os
 import json
-import torch
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import Any, Dict, List
 from skimage import io, color
 from skimage.transform import resize
 from matplotlib import patches
-
-
-def preprocess_and_crop_image(image, bbox):
-    # Grayscaling & Normalizing (Normalized within rgb2gray function)
-    gray_image = color.rgb2gray(image)
-    xmin = int(bbox["xmin"] / 4)
-    ymin = int(bbox["ymin"] / 4)
-    xmax = int(bbox["xmax"] / 4)
-    ymax = int(bbox["ymax"] / 4)
-
-    # Resizing from 2048x2048 to 512x512
-    resized_image = resize(gray_image, (512, 512), anti_aliasing=True)
-    resized_image = resized_image[ymin:ymax, xmin:xmax]
-    resized_image = resize(resized_image, (64, 64))
-    resized_image = torch.Tensor(resized_image)
-    resized_image = torch.stack([resized_image] * 3, axis=0)
-    return resized_image
 
 
 def preprocess_image(img_path: str) -> np.ndarray:
