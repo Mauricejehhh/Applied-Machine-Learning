@@ -6,60 +6,32 @@ from PIL import Image
 from typing import Optional, Callable, Any
 
 
-class TT100KDataset(Dataset):
-    """Custom dataset for the TT100K traffic sign dataset."""
-
-    def __init__(self,
-                 annotations_file: str,
-                 root_dir: str,
-                 transform: Optional[Callable] = None):
-        """
-        Initializes the TT100KDataset.
-
-        Args:
-            annotations_file (str): Path to the JSON file with annotations.
-            root_dir (str): Directory with all the images.
-            transform (Optional[Callable], optional): Optional transform to be
-            applied on a sample. Defaults to None.
-        """
-        with open(annotations_file, 'r') as f:
-            self.annotations = json.load(f)
-        self.image_ids = list(self.annotations['imgs'].keys())
-        self.root_dir = root_dir
+class TK100Dataset(Dataset):
+    def __init__(self, root, transform=None):
+        self.root = root
         self.transform = transform
-        self.class_to_idx = {cls: idx for idx, cls in
-                             enumerate(self.annotations['types'])}
+        self.images = []
+        self.targets = []
 
-    def __len__(self) -> int:
-        """
-        Returns:
-            int: Number of images in the dataset.
-        """
-        return len(self.annotations['imgs'])
+        for fname in os.listdir(root):
+            if fname.endswith(".jpg") or fname.endswith(".png"):
+                img_path = os.path.join(root, fname)
+                ann_path = img_path.replace(".jpg", ".json").replace(".png", ".json")
+                if os.path.exists(ann_path):
+                    self.images.append(img_path)
+                    with open(ann_path, "r") as f:
+                        box = json.load(f)["bbox"]  # [x, y, w, h], normalized
+                        self.targets.append(torch.tensor(box, dtype=torch.float32))
 
-    def __getitem__(self, idx: int) -> Any:
-        img_id = self.image_ids[idx]
-        entry = self.annotations['imgs'][img_id]
+    def __len__(self):
+        return len(self.images)
 
-        img_path = os.path.join(self.root_dir, entry['path'])
-        image = Image.open(img_path).convert('RGB')
-
+    def __getitem__(self, idx):
+        img = Image.open(self.images[idx]).convert("RGB")
         if self.transform:
-            image = self.transform(image)
-
-        # Skip images without objects
-        if len(entry['objects']) == 0:
-            return self.__getitem__((idx + 1) % len(self))
-
-        # Extract bounding box from first object
-        bbox_dict = entry['objects'][0]['bbox']
-        bbox = [bbox_dict['xmin'],
-                bbox_dict['ymin'],
-                bbox_dict['xmax'],
-                bbox_dict['ymax']]
-        bbox_tensor = torch.tensor(bbox, dtype=torch.float32)
-
-        return image, bbox_tensor
+            img = self.transform(img)
+        target = self.targets[idx]
+        return img, target
 
 
 class TT100KSignDataset(Dataset):
