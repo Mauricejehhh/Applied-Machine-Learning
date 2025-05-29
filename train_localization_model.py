@@ -80,7 +80,8 @@ tt100k_data = TT100KDataset(filtered_annotations, root, transform)
 t_size: int = int(0.8 * len(tt100k_data))
 v_size: int = len(tt100k_data) - t_size
 train_split, val_split = random_split(tt100k_data, [t_size, v_size])
-
+subset = torch.utils.data.Subset(train_split, range(4))
+loader = DataLoader(subset, batch_size=4, collate_fn=collate_fn)
 t_loader = DataLoader(train_split,
                       batch_size=4,
                       shuffle=True,
@@ -90,7 +91,7 @@ v_loader = DataLoader(val_split,
                       shuffle=False,
                       collate_fn=collate_fn)
 
-# Training setup
+# Initialize training loop parameters
 epochs: int = 1
 lr: float = 0.001
 device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -113,14 +114,17 @@ for epoch in range(epochs):
         labels_tensor = torch.stack(labels).to(device)
 
         optimizer.zero_grad()
-        outputs = model(images_tensor)
-        t_loss = loss_fn(outputs, labels_tensor)
+        outputs = model(images)
+
+        print(f"Output: {outputs[0].detach().cpu().numpy()}")
+        print(f"Label : {labels[0].detach().cpu().numpy()}")
+        t_loss = loss_fn(outputs, labels)
         t_loss.backward()
         running_tloss += t_loss.item()
         optimizer.step()
 
         if i % 10 == 0:
-            print(f'\nBatch {i}: Avg Loss = {running_tloss / 10:.4f}')
+            print(f'\nBatch {i}: Avg Loss = {running_tloss / 10:.6f}')
             running_tloss = 0.0
 
     # Validation loop
@@ -138,13 +142,16 @@ for epoch in range(epochs):
 
     print(f'Validation Loss: {val_loss / len(v_loader):.4f}')
 
-# Save trained model
 torch.save(model.state_dict(), model_path)
 print(f'Saved model to: {model_path}')
+model = BboxRegression()
+model = model.to(device)
+m_state_dict = torch.load(model_path, weights_only=True)
+model.load_state_dict(m_state_dict)
 
 # Inference on a single sample
 model.eval()
-sample_image, sample_target = val_split[0]
+sample_image, sample_target = train_split.__getitem__(4)
 image_tensor = sample_image.to(device).unsqueeze(0)
 
 with torch.no_grad():
