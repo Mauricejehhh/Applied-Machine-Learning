@@ -64,7 +64,8 @@ Here, you find a short description about the API, as well as the documentation f
 The 'post / predict' function is the interactive interface where we can upload an image. For now, as we are using two individual base models, please upload an image of the actual dataset. The function will use our trained localization model to predict its bounding boxes. After that, it will take the ground truth bounding boxes from the dataset and use the trained classification model to predict the type of traffic sign. 
 
 The response / result will show below, with the first bounding box showing the pixels (xmin, ymin, xmax, ymax) of the original image (as our baseline model only localizes the first bounding box). Below that, it will show all predictions of traffic sign types from all bounding boxes from the ground truths of the image in the dataset. The prediction (e.g. p150) corresponds to the traffic sign in the dataset 'marks' file.
----
+
+
 ## Requirements
 All dependencies, including specific versions, are listed in the requirements.txt file. This ensures a consistent environment for training, evaluation, and deployment.
 
