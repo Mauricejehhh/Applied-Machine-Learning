@@ -14,8 +14,7 @@ class BboxRegression(nn.Module):
         self.bbox_head = nn.Sequential(
             nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(),
-            nn.Linear(2048, 4),
-            nn.Sigmoid()
+            nn.Linear(2048, 4)
         )
 
     def forward(self, x):
