@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.patches as patches
+import albumentations as A
 from project_name.models.localization_base_model import BboxRegression
 from project_name.data.dataset_loader import TT100KDataset
 from torch.utils.data import random_split, DataLoader
@@ -70,7 +71,8 @@ tt100k_data = TT100KDataset(filtered_annotations, root, transform)
 t_size = int(0.8 * len(tt100k_data))
 v_size = len(tt100k_data) - t_size
 train_split, val_split = random_split(tt100k_data, [t_size, v_size])
-
+subset = torch.utils.data.Subset(train_split, range(4))
+loader = DataLoader(subset, batch_size=4, collate_fn=collate_fn)
 t_loader = DataLoader(train_split,
                       batch_size=4,
                       shuffle=True,
@@ -82,10 +84,10 @@ v_loader = DataLoader(val_split,
                       collate_fn=collate_fn)
 
 # Initialize training loop parameters
-epochs = 1
+epochs = 20
 lr = 0.001
 
-# Set device (cude or cpu) and initialize bbox regressor
+# Set device (cuda or cpu) and initialize bbox regressor
 print(f'Cuda (GPU support) available: {torch.cuda.is_available()}')
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -110,13 +112,15 @@ for epoch in range(epochs):
         optimizer.zero_grad()
         outputs = model(images)
 
+        print(f"Output: {outputs[0].detach().cpu().numpy()}")
+        print(f"Label : {labels[0].detach().cpu().numpy()}")
         t_loss = loss_fn(outputs, labels)
         t_loss.backward()
         running_tloss += t_loss.item()
         optimizer.step()
 
         if i % 10 == 0:
-            print(f'\nBatch {i}: Avg Loss = {running_tloss / 10:.4f}')
+            print(f'\nBatch {i}: Avg Loss = {running_tloss / 10:.6f}')
             running_tloss = 0.0
 
     # Validation loop
@@ -134,12 +138,17 @@ for epoch in range(epochs):
 
     # print(f'Validation Loss: {val_loss / len(v_loader):.4f}')
 
-torch.save(model.state_dict(), model_path)
-print(f'Saved model to: {model_path}')
+# torch.save(model.state_dict(), model_path)
+# print(f'Saved model to: {model_path}')
+
+# model = BboxRegression()
+# model = model.to(device)
+# m_state_dict = torch.load(model_path, weights_only=True)
+# model.load_state_dict(m_state_dict)
 
 # Pick one sample from the validation set
 model.eval()
-sample_image, sample_target = val_split[0]
+sample_image, sample_target = train_split.__getitem__(4)
 image_tensor = sample_image.to(device).unsqueeze(0)
 print(sample_image.shape)
 with torch.no_grad():

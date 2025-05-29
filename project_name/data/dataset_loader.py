@@ -1,6 +1,7 @@
 import os
 import json
 import torch
+import numpy as np
 from torch.utils.data import Dataset
 from PIL import Image
 
@@ -27,7 +28,7 @@ class TT100KDataset(Dataset):
         img_data = self.annotations['imgs'][img_id]
         img_path = os.path.join(self.root_dir, img_data['path'])
         image = Image.open(img_path).convert('RGB')
-
+        w, h = image.size
         # Store all object information and return at once
         boxes = []
         labels = []
@@ -35,8 +36,6 @@ class TT100KDataset(Dataset):
         for obj in img_data['objects']:
             bbox = obj['bbox']
             category = obj['category']
-
-            w, h = image.size
             xmin = bbox['xmin'] / w
             ymin = bbox['ymin'] / h
             xmax = bbox['xmax'] / w
@@ -45,13 +44,13 @@ class TT100KDataset(Dataset):
             boxes.append([xmin, ymin, xmax, ymax])
             labels.append(self.label_to_idx[category])
 
+        if self.transform:
+            image = self.transform(image)
+
         target = {
             'boxes': torch.tensor(boxes[0], dtype=torch.float32),
             'labels': torch.tensor(labels[0], dtype=torch.int64)
         }
-
-        if self.transform:
-            image = self.transform(image)
 
         return image, target
 
