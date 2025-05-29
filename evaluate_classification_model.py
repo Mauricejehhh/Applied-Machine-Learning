@@ -33,7 +33,7 @@ root = os.getcwd() + '/data_storage/tt100k_2021/'
 annotations = root + 'annotations_all.json'
 filtered_annotations = root + 'filtered_test_annotations.json'
 ids_file = root + 'test/ids.txt'
-model_path = os.getcwd() + '/models/model.pth'
+model_path = os.getcwd() + '/models/classi_model.pth'
 
 if not os.path.exists(filtered_annotations):
     print('Creating a new .json file for training ids.')

@@ -28,21 +28,26 @@ class TT100KDataset(Dataset):
         img_path = os.path.join(self.root_dir, img_data['path'])
         image = Image.open(img_path).convert('RGB')
 
-        obj = img_data['objects'][0]
-        bbox = obj['bbox']
-        category = obj['category']
+        # Store all object information and return at once
+        boxes = []
+        labels = []
 
-        w, h = image.size
-        xmin = bbox['xmin'] / w
-        ymin = bbox['ymin'] / h
-        xmax = bbox['xmax'] / w
-        ymax = bbox['ymax'] / h
+        for obj in img_data['objects']:
+            bbox = obj['bbox']
+            category = obj['category']
 
-        boxes = torch.tensor([xmin, ymin, xmax, ymax], dtype=torch.float32)
+            w, h = image.size
+            xmin = bbox['xmin'] / w
+            ymin = bbox['ymin'] / h
+            xmax = bbox['xmax'] / w
+            ymax = bbox['ymax'] / h
+
+            boxes.append([xmin, ymin, xmax, ymax])
+            labels.append(self.label_to_idx[category])
 
         target = {
-            'boxes': boxes,  # Shape: [4]
-            'labels': torch.tensor(self.label_to_idx[category])
+            'boxes': torch.tensor(boxes[0], dtype=torch.float32),
+            'labels': torch.tensor(labels[0], dtype=torch.int64)
         }
 
         if self.transform:

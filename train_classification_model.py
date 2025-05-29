@@ -35,7 +35,7 @@ root = os.getcwd() + '/data_storage/tt100k_2021/'
 annotations = root + 'annotations_all.json'
 filtered_annotations = root + 'filtered_annotations.json'
 ids_file = root + 'train/ids.txt'
-model_path = os.getcwd() + '/models/model.pth'
+model_path = os.getcwd() + '/models/classi_model.pth'
 
 # Find all training ids from the ids.txt file in train/
 # This is bound to change as custom splits will be needed.
@@ -105,6 +105,7 @@ for epoch in range(epochs):
         labels = labels.to(device)
         optimizer.zero_grad()
         outputs = model(inputs)
+        outputs = outputs.to(device)
         t_loss = loss_fn(outputs, labels)
         t_loss.backward()
         running_tloss += t_loss.item()
