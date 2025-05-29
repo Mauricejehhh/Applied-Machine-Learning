@@ -1,22 +1,29 @@
-## Applied Machine Learning: Traffic Sign Detection & Classification
+## Applied Machine Learning: TT100K Traffic Sign Detector & Classifier
 
-This project builds a traffic sign recognition system using deep learning. It handles two core tasks:
+This project implements a Convolutional Neural Network (CNN) based pipeline to detect and classify traffic signs in images using the TT100K dataset.
+The project includes:
+   - A bounding box regression model using a frozen ResNet-50.
+   - A classifier CNN trained to recognize 232 traffic sign types.
+   - A FastAPI server for running predictions.
+   - Scripts for training and evaluating both classification and localization models.
 
-    Localization: Identify where traffic signs are located in an image by predicting bounding boxes.
+# The Classification Model
 
-    Classification: Classify each identified sign into a specific type (e.g., "stop", "speed limit", etc.).
+# The Localization Model
 
-A FastAPI-based web interface allows users to interact with the models by uploading images and receiving predictions in real time.
-
+# Fast API
 ---
+## Requirements
+
 
 ## 📁 Project Structure
 ```bash
 ├───data  # Stores .csv
-├───models  # Stores .pkl
-├───notebooks  # Contains experimental .ipynbs
+├───models  # Stores .pth
 ├───project_name
 │   ├───data  # For data processing, not storing .csv
+│       ├───dataset_loader.py
+│       └───dataset_visualizer.py
 │   ├───features
 │   └───models  # For model creation, not storing .pkl
 ├───reports
@@ -32,5 +39,6 @@ A FastAPI-based web interface allows users to interact with the models by upload
 ├───Pipfile.lock
 ├───README.md
 ```
+
 
 **Good luck and happy coding! 🚀**

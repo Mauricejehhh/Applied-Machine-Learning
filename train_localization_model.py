@@ -33,7 +33,7 @@ root: str = os.getcwd() + '/data_storage/tt100k_2021/'
 annotations: str = root + 'annotations_all.json'
 filtered_annotations: str = root + 'filtered_annotations.json'
 ids_file: str = root + 'train/ids.txt'
-model_path: str = os.getcwd() + '/models/locali_model.pth'
+model_path: str = os.getcwd() + '/models/localization_model.pth'
 
 # Filter annotations by train IDs
 if not os.path.exists(filtered_annotations):

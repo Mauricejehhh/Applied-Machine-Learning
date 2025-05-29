@@ -141,18 +141,22 @@ class Trainer:
                 print(f'\nBatch {i}: Loss: {running_loss / 10:.4f}')
                 running_loss = 0.0
 
-    def validate(self, data_loader: DataLoader) -> float:
+    def validate(self, data_loader: DataLoader) -> Tuple[float, float]:
         """
-        Validates the model on the validation dataset.
+        Validates the model on the provided validation dataset.
 
         Args:
-            data_loader (DataLoader): Validation DataLoader.
+            data_loader (DataLoader): DataLoader for the validation dataset.
 
         Returns:
-            float: Average validation loss.
+            Tuple[float, float]: A tuple containing:
+                - Average validation loss (float)
+                - Validation accuracy (float)
         """
         self.model.eval()
         running_loss = 0.0
+        correct = 0
+        total = 0
 
         with torch.no_grad():
             for inputs, labels in tqdm(data_loader, desc="Validation"):
@@ -161,9 +165,15 @@ class Trainer:
                 loss = self.loss_fn(outputs, labels)
                 running_loss += loss.item()
 
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+
         avg_loss = running_loss / len(data_loader)
+        accuracy = correct / total
         print(f'Validation Loss: {avg_loss:.4f}')
-        return avg_loss
+        print(f'Validation Accuracy: {accuracy:.4f}')
+        return avg_loss, accuracy
 
 
 class TrainingPipeline:
@@ -198,7 +208,13 @@ class TrainingPipeline:
 
         for epoch in range(self.epochs):
             trainer.train(train_loader, epoch)
-            trainer.validate(val_loader)
+            val_loss, val_accuracy = trainer.validate(val_loader)
+            random_accuracy = 1 / num_classes
+            print(f'Random Guess Accuracy: {random_accuracy:.4f}')
+            if val_accuracy > random_accuracy:
+                print(" Model performs better than random guessing.")
+            else:
+                print(" Model is not yet better than random guessing.")
 
         torch.save(model.state_dict(), self.model_save_path)
         print(f'Model saved to: {self.model_save_path}')
