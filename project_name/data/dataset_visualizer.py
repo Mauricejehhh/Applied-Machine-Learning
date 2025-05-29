@@ -2,31 +2,38 @@ import os
 import json
 import matplotlib.pyplot as plt
 import numpy as np
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 from skimage import io, color
 from skimage.transform import resize
 from matplotlib import patches
+from matplotlib.axes import Axes
 
 
 class ImagePreprocessor:
-    def __init__(self, output_size=(512, 512), to_grayscale=True):
-        """Initialize the preprocessor.
+    """
+    A utility class for preprocessing images: resizing and optional grayscale conversion.
+    """
+    def __init__(self, output_size: Tuple[int, int] = (512, 512),
+                 to_grayscale: bool = True):
+        """
+        Initialize the preprocessor.
 
         Args:
-            output_size (tuple): Target size for resized images.
+            output_size (Tuple[int, int]): Target size for resized images.
             to_grayscale (bool): Whether to convert images to grayscale.
         """
         self.output_size = output_size
         self.to_grayscale = to_grayscale
 
     def preprocess(self, img_path: str) -> np.ndarray:
-        """Preprocess an image: load, optionally grayscale, and resize.
+        """
+        Preprocess an image: load, optionally convert to grayscale, and resize.
 
         Args:
             img_path (str): Path to the image file.
 
         Returns:
-            np.ndarray: Preprocessed image.
+            np.ndarray: Preprocessed image array.
         """
         image = io.imread(img_path)
         if self.to_grayscale:
@@ -35,27 +42,52 @@ class ImagePreprocessor:
 
 
 class TT100KVisualizer:
-    """Visualizes and processes images from the TT100K dataset."""
+    """
+    Visualizes and processes images from the TT100K traffic sign dataset.
+    """
     def __init__(self, dataset_path: str) -> None:
+        """
+        Initialize the visualizer with the dataset path.
+
+        Args:
+            dataset_path (str): Path to the root of the TT100K dataset.
+        """
         self.dataset_path = dataset_path
-        self.annotations = self._load_annotations()
-        self.image_ids = self._load_image_ids()
+        self.annotations: Dict[str, Any] = self._load_annotations()
+        self.image_ids: List[str] = self._load_image_ids()
         self.preprocessor = ImagePreprocessor()
 
     def _load_annotations(self) -> Dict[str, Any]:
+        """
+        Load annotations from the JSON file.
+
+        Returns:
+            Dict[str, Any]: Parsed JSON annotations.
+        """
         annotations_path = os.path.join(self.dataset_path,
                                         'annotations_all.json')
         with open(annotations_path, 'r') as f:
             return json.load(f)
 
     def _load_image_ids(self) -> List[str]:
+        """
+        Load image IDs from the text file.
+
+        Returns:
+            List[str]: List of image IDs.
+        """
         ids_path = os.path.join(self.dataset_path, 'train', 'ids.txt')
         with open(ids_path, 'r') as f:
             return [line.strip() for line in f.readlines()]
 
-    def _draw_bounding_boxes(self,
-                             ax,
-                             traffic_signs: List[Dict[str, Any]]) -> None:
+    def _draw_bounding_boxes(self, ax: Axes, traffic_signs: List[Dict[str, Any]]) -> None:
+        """
+        Draw bounding boxes on the provided matplotlib axes.
+
+        Args:
+            ax (Axes): Matplotlib axes to draw on.
+            traffic_signs (List[Dict[str, Any]]): List of traffic sign annotations.
+        """
         for sign in traffic_signs:
             bbox = sign["bbox"]
             xmin = bbox["xmin"] / 4
@@ -77,10 +109,12 @@ class TT100KVisualizer:
             ax.add_patch(bbox_patch)
 
     def visualize(self) -> None:
+        """
+        Visualize images and their annotated bounding boxes from the dataset.
+        """
         for img_id in self.image_ids:
             img_path = os.path.join(self.dataset_path,
-                                    "train",
-                                    f"{img_id}.jpg")
+                                    "train", f"{img_id}.jpg")
             processed_image = self.preprocessor.preprocess(img_path)
 
             fig, ax = plt.subplots(figsize=(5, 5))

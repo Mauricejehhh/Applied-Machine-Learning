@@ -5,129 +5,207 @@ Make sure this is the case, otherwise it will not work.
 """
 import os
 import json
-import matplotlib.pyplot as plt
-import numpy as np
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.data import DataLoader, random_split
 from torchvision import transforms
 from tqdm import tqdm
+
 from project_name.models.classification_base_model import CNNClassifier
 from project_name.data.dataset_loader import TT100KSignDataset
-from torch.utils.data import random_split, DataLoader
 
 
-def matplotlib_imshow(img, one_channel=False):
-    if one_channel:
-        img = img.mean(dim=0)
-    img = img / 2 + 0.5     # unnormalize
-    npimg = img.numpy()
-    if one_channel:
-        plt.imshow(npimg, cmap="Greys")
-    else:
-        plt.imshow(np.transpose(npimg, (1, 2, 0)))
+class DatasetPreparer:
+    """
+    Handles creation of filtered annotation JSON file based on train IDs.
+    """
+
+    def __init__(self, data_root: str) -> None:
+        self.data_root = data_root
+        self.annos_path = os.path.join(data_root,
+                                       'annotations_all.json')
+        self.filtered_path = os.path.join(data_root,
+                                          'filtered_annotations.json')
+        self.ids_path = os.path.join(data_root,
+                                     'train',
+                                     'ids.txt')
+
+    def prepare(self) -> str:
+        """
+        Creates a filtered annotation file if it doesn't exist.
+
+        Returns:
+            str: Path to the filtered annotations file.
+        """
+        if not os.path.exists(self.filtered_path):
+            print('Creating a new .json file for training ids.')
+            with open(self.ids_path, 'r') as f:
+                ids = set(line.strip() for line in f)
+
+            with open(self.annos_path, 'r') as f:
+                annos = json.load(f)
+
+            filtered_imgs = {
+                img_id: img_data for img_id,
+                img_data in annos['imgs'].items() if img_id in ids
+            }
+
+            train_annotations = {
+                'types': annos['types'],
+                'imgs': filtered_imgs
+            }
+
+            with open(self.filtered_path, 'w') as f:
+                json.dump(train_annotations, f, indent=4)
+
+        return self.filtered_path
 
 
-# These work for me, I am unsure whether they could work for you.
-# To be sure, run this file from the /Applied-Machine-Learning
-# directory, it should theoretically work.
-root = os.getcwd() + '/data_storage/tt100k_2021/'
-annotations = root + 'annotations_all.json'
-filtered_annotations = root + 'filtered_annotations.json'
-ids_file = root + 'train/ids.txt'
-model_path = os.getcwd() + '/models/classi_model.pth'
+class DataModule:
+    """
+    Handles dataset loading, transformation, and splitting.
+    """
 
-# Find all training ids from the ids.txt file in train/
-# This is bound to change as custom splits will be needed.
-if not os.path.exists(filtered_annotations):
-    print('Creating a new .json file for training ids.')
-    with open(ids_file, 'r') as f:
-        ids = set(line.strip() for line in f)
+    def __init__(self, annotation_path: str,
+                 data_root: str,
+                 batch_size: int = 32) -> None:
+        self.annotation_path = annotation_path
+        self.data_root = data_root
+        self.batch_size = batch_size
 
-    with open(annotations, 'r') as f:
-        annos = json.load(f)
+        self.transform = transforms.Compose([
+            transforms.Grayscale(num_output_channels=3),
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5] * 3, std=[0.5] * 3),
+        ])
 
-    # Filter annotations file for training ids only
-    filtered_imgs = {img_id: img_data
-                     for img_id, img_data in annos['imgs'].items()
-                     if img_id in ids}
+    def setup(self) -> Tuple[DataLoader, DataLoader, int]:
+        """
+        Sets up training and validation DataLoaders.
 
-    train_annotations = {
-        'types': annos['types'],
-        'imgs': filtered_imgs
-    }
+        Returns:
+            Tuple[DataLoader, DataLoader, int]: train_loader, val_loader, num_classes
+        """
+        dataset = TT100KSignDataset(self.annotation_path,
+                                    self.data_root,
+                                    self.transform)
+        train_size = int(0.8 * len(dataset))
+        val_size = len(dataset) - train_size
+        train_data, val_data = random_split(dataset, [train_size, val_size])
+        return (
+            DataLoader(train_data, batch_size=self.batch_size, shuffle=True),
+            DataLoader(val_data, batch_size=self.batch_size, shuffle=True),
+            len(dataset.annotations['types'])
+        )
 
-    with open(filtered_annotations, 'w') as f:
-        json.dump(train_annotations, f, indent=4)
 
-# Train split and validation split should be decided later,
-# these are just values for now
-transforms = transforms.Compose([
-    transforms.Grayscale(num_output_channels=3),
-    transforms.Resize((64, 64)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-])
+class Trainer:
+    """
+    Encapsulates training and validation routines for a model.
+    """
 
-tt100k_data = TT100KSignDataset(filtered_annotations, root, transforms)
-t_size = int(0.8 * len(tt100k_data))
-v_size = len(tt100k_data) - t_size
+    def __init__(self, model: nn.Module,
+                 device: str,
+                 learning_rate: float = 0.001) -> None:
+        self.model = model.to(device)
+        self.device = device
+        self.loss_fn = nn.CrossEntropyLoss()
+        self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
 
-# Initialize data loaders for testing and validations sets
-train_split, val_split = random_split(tt100k_data, [t_size, v_size])
-t_loader = DataLoader(train_split, 32, shuffle=True)
-v_loader = DataLoader(val_split, 32, shuffle=True)
+    def train(self, d_loader: DataLoader, ep_idx: int) -> None:
+        """
+        Trains the model for one epoch.
 
-# Initialize training loop parameters
-epochs = 1
-lr = 0.001
+        Args:
+            d_loader (DataLoader): Training DataLoader.
+            ep_idx (int): Current epoch index.
+        """
+        self.model.train()
+        running_loss = 0.0
 
-# Initialize model, optimizer etc.
-print(f'Cuda (GPU support) available: {torch.cuda.is_available()}')
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-num_of_classes = len(tt100k_data.annotations['types'])
+        for i, (inputs, labels) in enumerate(tqdm(d_loader,
+                                                  desc=f"Epoch {ep_idx+1} Training")):
+            inputs, labels = inputs.to(self.device), labels.to(self.device)
+            self.optimizer.zero_grad()
+            outputs = self.model(inputs)
+            loss = self.loss_fn(outputs, labels)
+            loss.backward()
+            self.optimizer.step()
+            running_loss += loss.item()
 
-model = CNNClassifier(num_of_classes)
-model = model.to(device)
-loss_fn = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=lr)
+            if i % 10 == 0:
+                print(f'\nBatch {i}: Loss: {running_loss / 10:.4f}')
+                running_loss = 0.0
 
-for epoch in range(epochs):
-    print(f'Epoch [{epoch + 1}/{epochs}]')
-    # Set model to training mode
-    model.train()
-    running_tloss = 0.0
-    running_vloss = 0.0
+    def validate(self, data_loader: DataLoader) -> float:
+        """
+        Validates the model on the validation dataset.
 
-    for i, data in enumerate(tqdm(t_loader)):
-        inputs, labels = data
-        inputs = inputs.to(device)
-        labels = labels.to(device)
-        optimizer.zero_grad()
-        outputs = model(inputs)
-        outputs = outputs.to(device)
-        t_loss = loss_fn(outputs, labels)
-        t_loss.backward()
-        running_tloss += t_loss.item()
-        optimizer.step()
+        Args:
+            data_loader (DataLoader): Validation DataLoader.
 
-        if i % 10 == 0:
-            print(f'\n batch {i}: last loss: {running_tloss / 10}')
-            running_tloss = 0
+        Returns:
+            float: Average validation loss.
+        """
+        self.model.eval()
+        running_loss = 0.0
 
-    # Set model to evaluation mode
-    model.eval()
+        with torch.no_grad():
+            for inputs, labels in tqdm(data_loader, desc="Validation"):
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
+                outputs = self.model(inputs)
+                loss = self.loss_fn(outputs, labels)
+                running_loss += loss.item()
 
-    with torch.no_grad():
-        for i, data in enumerate(tqdm(v_loader)):
-            inputs, labels = data
-            inputs = inputs.to(device)
-            labels = labels.to(device)
-            outputs = model(inputs)
-            loss = loss_fn(outputs, labels)
-            running_vloss += loss
-        avg_loss = running_vloss / len(v_loader)
-        print(f'Average validation loss: {avg_loss:.4f}')
+        avg_loss = running_loss / len(data_loader)
+        print(f'Validation Loss: {avg_loss:.4f}')
+        return avg_loss
 
-torch.save(model.state_dict(), model_path)
-print(f'Saved model to: {model_path}')
+
+class TrainingPipeline:
+    """
+    Full training pipeline that ties together dataset prep, data loading, training, and saving.
+    """
+
+    def __init__(self, data_root:
+                 str, model_save_path:
+                 str, epochs: int = 1) -> None:
+        self.data_root = data_root
+        self.model_save_path = model_save_path
+        self.epochs = epochs
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    def run(self) -> None:
+        """
+        Executes the training pipeline:
+        - Prepares filtered dataset
+        - Loads data
+        - Trains and validates model
+        - Saves trained weights
+        """
+        preparer = DatasetPreparer(self.data_root)
+        annotation_path = preparer.prepare()
+
+        data_module = DataModule(annotation_path, self.data_root)
+        train_loader, val_loader, num_classes = data_module.setup()
+
+        model = CNNClassifier(num_classes)
+        trainer = Trainer(model, self.device)
+
+        for epoch in range(self.epochs):
+            trainer.train(train_loader, epoch)
+            trainer.validate(val_loader)
+
+        torch.save(model.state_dict(), self.model_save_path)
+        print(f'Model saved to: {self.model_save_path}')
+
+
+if __name__ == "__main__":
+    root_path = os.path.join(os.getcwd(), 'data_storage', 'tt100k_2021')
+    model_path = os.path.join(os.getcwd(), 'models', 'model.pth')
+    pipeline = TrainingPipeline(root_path, model_path, epochs=1)
+    pipeline.run()

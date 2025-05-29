@@ -1,36 +1,60 @@
 import os
 import json
+from typing import Optional, Callable, Tuple, Dict, List
 import torch
 from torch.utils.data import Dataset
-from PIL import Image
+from PIL import Image, Image as PILImage
 
 
 class TT100KDataset(Dataset):
-    def __init__(self, annotations_file, root_dir, transform=None):
+    """
+    A dataset for loading full images and
+    corresponding bounding box annotations
+    from the TT100K dataset.
+    """
+    def __init__(self, annotations_file: str,
+                 root_dir: str,
+                 transform: Optional[Callable] = None):
+        """
+        Args:
+            annotations_file (str): Path to the JSON annotation file.
+            root_dir (str): Directory with all the images.
+            transform (Callable, optional): Optional transform to be applied on a sample.
+        """
         with open(annotations_file, 'r') as f:
             self.annotations = json.load(f)
 
-        self.image_ids = list(self.annotations['imgs'].keys())
-        self.root_dir = root_dir
-        self.transform = transform
-        self.labels = sorted(self.annotations["types"])
-        self.label_to_idx = {label: idx for idx,
-                             label in enumerate(self.labels)}
-        self.idx_to_label = {idx: label for label,
-                             idx in self.label_to_idx.items()}
+        self.image_ids: List[str] = list(self.annotations['imgs'].keys())
+        self.root_dir: str = root_dir
+        self.transform: Optional[Callable] = transform
+        self.labels: List[str] = sorted(self.annotations["types"])
+        self.label_to_idx: Dict[str, int] = {label: idx for idx,
+                                             label in enumerate(self.labels)}
+        self.idx_to_label: Dict[int, str] = {idx: label for label,
+                                             idx in self.label_to_idx.items()}
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """Returns the total number of images."""
         return len(self.image_ids)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Tuple[PILImage.Image,
+                                             Dict[str, torch.Tensor]]:
+        """
+        Args:
+            idx (int): Index of the image to retrieve.
+
+        Returns:
+            Tuple[Image, Dict[str, torch.Tensor]]: A tuple containing
+                the image and its target dictionary,
+                which includes bounding boxes and labels.
+        """
         img_id = self.image_ids[idx]
         img_data = self.annotations['imgs'][img_id]
         img_path = os.path.join(self.root_dir, img_data['path'])
         image = Image.open(img_path).convert('RGB')
 
-        # Store all object information and return at once
-        boxes = []
-        labels = []
+        boxes: List[List[float]] = []
+        labels: List[int] = []
 
         for obj in img_data['objects']:
             bbox = obj['bbox']
@@ -57,21 +81,30 @@ class TT100KDataset(Dataset):
 
 
 class TT100KSignDataset(Dataset):
-    """ Dataset that contains the cropped sign images,
-    instead of the entire picture.
     """
-    def __init__(self, annotations_file, root_dir, transform=None):
+    A dataset for loading cropped traffic sign images from the TT100K dataset.
+    """
+    def __init__(self, annotations_file: str,
+                 root_dir: str,
+                 transform: Optional[Callable] = None):
+        """
+        Args:
+            annotations_file (str): Path to the JSON annotation file.
+            root_dir (str): Directory with all the images.
+            transform (Callable, optional): Optional transform to be applied on a sample.
+        """
         with open(annotations_file, 'r') as f:
             self.annotations = json.load(f)
-        self.image_ids = list(self.annotations['imgs'].keys())
-        self.root_dir = root_dir
-        self.transform = transform
-        self.labels = sorted(self.annotations["types"])
-        self.label_to_idx = {label: idx for idx,
-                             label in enumerate(self.labels)}
-        self.idx_to_label = {idx: label for idx,
-                             label in enumerate(self.labels)}
-        self.data = []
+
+        self.image_ids: List[str] = list(self.annotations['imgs'].keys())
+        self.root_dir: str = root_dir
+        self.transform: Optional[Callable] = transform
+        self.labels: List[str] = sorted(self.annotations["types"])
+        self.label_to_idx: Dict[str, int] = {label: idx for idx,
+                                             label in enumerate(self.labels)}
+        self.idx_to_label: Dict[int, str] = {idx: label for idx,
+                                             label in enumerate(self.labels)}
+        self.data: List[Dict] = []
 
         for img_id, img_data in self.annotations['imgs'].items():
             img_path = os.path.join(self.root_dir, img_data['path'])
@@ -85,13 +118,20 @@ class TT100KSignDataset(Dataset):
                     'category': category
                 })
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """Returns the total number of cropped signs."""
         return len(self.data)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Tuple[PILImage.Image, int]:
+        """
+        Args:
+            idx (int): Index of the cropped image to retrieve.
+
+        Returns:
+            Tuple[Image, int]: A tuple containing the cropped image and its label index.
+        """
         entry = self.data[idx]
         img_path = entry['img_path']
-
         bbox = entry["bbox"]
         image = Image.open(img_path).convert('RGB')
 
@@ -102,4 +142,5 @@ class TT100KSignDataset(Dataset):
             ymax = int(bbox["ymax"])
             cropped_image = image.crop((xmin, ymin, xmax, ymax))
             image = self.transform(cropped_image)
+
         return image, self.label_to_idx[entry['category']]

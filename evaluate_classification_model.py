@@ -1,24 +1,115 @@
 """
-New evaluation file that loads a model trained through main.py
-and uses an accuracy metric to evaluate the performance.
+Evaluation script for a trained CNN classifier on the TT100K dataset.
+
+Steps:
+- Prepare dataset annotations (filter test set).
+- Load and preprocess test dataset.
+- Load trained model.
+- Run evaluation and display sample predictions.
 """
+
 import os
 import json
 import matplotlib.pyplot as plt
 import numpy as np
-import torchvision
 import torch
+import torchvision
 from torchvision import transforms
+from torch.utils.data import DataLoader
 from tqdm import tqdm
+from typing import Set, Dict, Any, Tuple
+
 from project_name.models.classification_base_model import CNNClassifier
 from project_name.data.dataset_loader import TT100KSignDataset
-from torch.utils.data import DataLoader
 
 
-def matplotlib_imshow(img, one_channel=False):
+def create_filtered_annotations(
+    annotations_path: str,
+    ids_path: str,
+    output_path: str
+) -> None:
+    """
+    Create a filtered annotation JSON file based on a set of image IDs.
+
+    Args:
+        annotations_path (str): Path to original annotations JSON.
+        ids_path (str): Path to the file containing image IDs to keep.
+        output_path (str): Path where the filtered annotations will be saved.
+    """
+    print('Creating a new .json file for test ids.')
+    with open(ids_path, 'r') as f:
+        ids: Set[str] = set(line.strip() for line in f)
+
+    with open(annotations_path, 'r') as f:
+        annotations: Dict[str, Any] = json.load(f)
+
+    filtered_imgs = {
+        img_id: img_data for img_id, img_data in annotations['imgs'].items() if img_id in ids
+    }
+
+    filtered_annotations = {
+        'types': annotations['types'],
+        'imgs': filtered_imgs
+    }
+
+    with open(output_path, 'w') as f:
+        json.dump(filtered_annotations, f, indent=4)
+
+
+def get_test_loader(annotations_file: str,
+                    root: str) -> Tuple[DataLoader, TT100KSignDataset]:
+    """
+    Load the test dataset and return a DataLoader and the dataset object.
+
+    Args:
+        annotations_file (str): Path to filtered annotations file.
+        root (str): Root directory for images.
+
+    Returns:
+        Tuple[DataLoader, TT100KSignDataset]: The test DataLoader and dataset object.
+    """
+    transform_pipeline = transforms.Compose([
+        transforms.Grayscale(num_output_channels=3),
+        transforms.Resize((64, 64)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+    ])
+    dataset = TT100KSignDataset(annotations_file, root, transform_pipeline)
+    loader = DataLoader(dataset, batch_size=32, shuffle=True)
+    return loader, dataset
+
+
+def load_model(model_path: str,
+               num_classes: int,
+               device: torch.device) -> CNNClassifier:
+    """
+    Load a trained model from a given path.
+
+    Args:
+        model_path (str): Path to the saved model weights.
+        num_classes (int): Number of output classes.
+        device (torch.device): Torch device to load model onto.
+
+    Returns:
+        CNNClassifier: The loaded model.
+    """
+    model = CNNClassifier(num_classes).to(device)
+    state_dict = torch.load(model_path, map_location=device)
+    model.load_state_dict(state_dict)
+    return model
+
+
+def matplotlib_imshow(img: torch.Tensor, one_channel: bool = False) -> None:
+    """
+    Display a tensor image using matplotlib.
+
+    Args:
+        img (torch.Tensor): Image tensor to display.
+        one_channel (bool): Whether to convert image to grayscale for display.
+    """
     if one_channel:
         img = img.mean(dim=0)
-    img = img / 2 + 0.5     # unnormalize
+    img = img / 2 + 0.5
     npimg = img.numpy()
     if one_channel:
         plt.imshow(npimg, cmap="Greys")
@@ -26,86 +117,84 @@ def matplotlib_imshow(img, one_channel=False):
         plt.imshow(np.transpose(npimg, (1, 2, 0)))
 
 
-# These work for me, I am unsure whether they could work for you.
-# To be sure, run this file from the /Applied-Machine-Learning
-# directory, it should theoretically work.
-root = os.getcwd() + '/data_storage/tt100k_2021/'
-annotations = root + 'annotations_all.json'
-filtered_annotations = root + 'filtered_test_annotations.json'
-ids_file = root + 'test/ids.txt'
-model_path = os.getcwd() + '/models/classi_model.pth'
+def evaluate(model: CNNClassifier,
+             dataloader: DataLoader,
+             device: torch.device) -> float:
+    """
+    Evaluate the model on the test set.
 
-if not os.path.exists(filtered_annotations):
-    print('Creating a new .json file for training ids.')
-    with open(ids_file, 'r') as f:
-        ids = set(line.strip() for line in f)
+    Args:
+        model (CNNClassifier): Trained model.
+        dataloader (DataLoader): Test data loader.
+        device (torch.device): Device to run evaluation on.
 
-    with open(annotations, 'r') as f:
-        annos = json.load(f)
+    Returns:
+        float: Accuracy as a percentage.
+    """
+    correct = 0
+    total = 0
 
-    # Filter annotations file for training ids only
-    filtered_imgs = {img_id: img_data
-                     for img_id, img_data in annos['imgs'].items()
-                     if img_id in ids}
+    with torch.no_grad():
+        for images, labels in tqdm(dataloader, desc="Evaluating"):
+            images, labels = images.to(device), labels.to(device)
+            outputs = model(images)
+            _, predictions = torch.max(outputs, 1)
+            correct += (predictions == labels).sum().item()
+            total += labels.size(0)
 
-    train_annotations = {
-        'types': annos['types'],
-        'imgs': filtered_imgs
-    }
+    return 100.0 * correct / total
 
-    with open(filtered_annotations, 'w') as f:
-        json.dump(train_annotations, f, indent=4)
 
-# Train split and validation split should be decided later,
-# these are just values for now
-# tt100k_data = TT100KDataset(filtered_annotations, root)
-transforms = transforms.Compose([
-    transforms.Grayscale(num_output_channels=3),
-    transforms.Resize((64, 64)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-])
+def show_sample_predictions(model: CNNClassifier,
+                            dataset: TT100KSignDataset,
+                            device: torch.device) -> None:
+    """
+    Display predictions for one batch of test data.
 
-# Load testing data
-tt100k_data = TT100KSignDataset(filtered_annotations, root, transforms)
-test_loader = DataLoader(tt100k_data, 32, shuffle=True)
+    Args:
+        model (CNNClassifier): Trained model.
+        dataset (TT100KSignDataset): Dataset used for label mapping.
+        device (torch.device): Device for inference.
+    """
+    loader = DataLoader(dataset, batch_size=32, shuffle=True)
+    images, labels = next(iter(loader))
+    outputs = model(images.to(device))
+    _, predicted = torch.max(outputs, 1)
 
-# Initialize model, optimizer etc.
-print(f'Cuda (GPU support) available: {torch.cuda.is_available()}')
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-num_of_classes = len(tt100k_data.annotations['types'])
+    img_grid = torchvision.utils.make_grid(images)
+    matplotlib_imshow(img_grid, one_channel=True)
+    plt.show()
 
-# Loading a model:
-model = CNNClassifier(num_of_classes)
-model = model.to(device)
-m_state_dict = torch.load(model_path, weights_only=True)
-model.load_state_dict(m_state_dict)
+    print("Ground Truth:",
+          [dataset.idx_to_label[label.item()] for label in labels])
+    print("Predicted   :",
+          [dataset.idx_to_label[p.item()] for p in predicted])
 
-# Dumb testing thing:
-dataiter = iter(test_loader)
-images, labels = next(dataiter)
-img_grid = torchvision.utils.make_grid(images)
-matplotlib_imshow(img_grid, one_channel=True)
-plt.show()
-outputs = model(images)
-_, predicted = torch.max(outputs, 1)
-print(f'Ground truth: {[tt100k_data.idx_to_label[
-    label.item()] for label in labels]}')
-print(f'Predicted: {[tt100k_data.idx_to_label[
-    pred.item()] for pred in predicted]}')
 
-# Accuracy:
-correct = 0
-total = 0
+def main() -> None:
+    """Main evaluation entry point."""
+    root = os.path.join(os.getcwd(), 'data_storage', 'tt100k_2021')
+    annotations_path = os.path.join(root, 'annotations_all.json')
+    filtered_annotations = os.path.join(root, 'filtered_test_annotations.json')
+    ids_file = os.path.join(root, 'test', 'ids.txt')
+    model_path = os.path.join(os.getcwd(), 'models', 'classi_model.pth')
 
-with torch.no_grad():
-    for data in tqdm(test_loader):
-        images, labels = data
-        images = images.to(device)
-        labels = labels.to(labels)
-        outputs = model(images)
-        _, pred = torch.max(outputs, 1)
-        total += labels.size(0)
-        correct += (pred == labels).sum().item()
+    if not os.path.exists(filtered_annotations):
+        create_filtered_annotations(annotations_path, ids_file,
+                                    filtered_annotations)
 
-print('Accuracy on testing data:', correct / total * 100)
+    test_loader, test_dataset = get_test_loader(filtered_annotations, root)
+
+    print(f'Cuda (GPU support) available: {torch.cuda.is_available()}')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    model = load_model(model_path, len(test_dataset.labels), device)
+    model.eval()
+
+    show_sample_predictions(model, test_dataset, device)
+    accuracy = evaluate(model, test_loader, device)
+    print(f'Accuracy on testing data: {accuracy:.2f}%')
+
+
+if __name__ == "__main__":
+    main()
