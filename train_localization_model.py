@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.patches as patches
-from project_name.models.localization_base_model import BboxRegression
-from project_name.data.dataset_loader import TT100KDataset
+from road_sign_detection.models.localization_base_model import BboxRegression
+from road_sign_detection.data.dataset_loader import TT100KDataset
 from torch.utils.data import random_split, DataLoader
 from torchvision import transforms
 from tqdm import tqdm

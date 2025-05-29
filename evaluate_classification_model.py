@@ -19,8 +19,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from typing import Set, Dict, Any, Tuple
 
-from project_name.models.classification_base_model import CNNClassifier
-from project_name.data.dataset_loader import TT100KSignDataset
+from road_sign_detection.models.classification_base_model import CNNClassifier
+from road_sign_detection.data.dataset_loader import TT100KSignDataset
 
 
 def create_filtered_annotations(

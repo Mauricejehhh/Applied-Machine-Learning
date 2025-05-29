@@ -136,6 +136,6 @@ class TT100KVisualizer:
 
 
 if __name__ == "__main__":
-    dataset_path = os.path.join(os.getcwd(), 'data_storage', 'tt100k_2021')
+    dataset_path = os.path.join(os.getcwd(), 'data', 'tt100k_2021')
     visualizer = TT100KVisualizer(dataset_path)
     visualizer.visualize()

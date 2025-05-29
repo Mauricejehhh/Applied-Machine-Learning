@@ -7,8 +7,8 @@ from torchvision import transforms
 from typing import Tuple, List
 from tqdm import tqdm
 
-from project_name.models.localization_base_model import BboxRegression
-from project_name.data.dataset_loader import TT100KDataset
+from road_sign_detection.models.localization_base_model import BboxRegression
+from road_sign_detection.data.dataset_loader import TT100KDataset
 
 def collate_fn(batch: List[Tuple[torch.Tensor, dict]]) -> Tuple:
     """

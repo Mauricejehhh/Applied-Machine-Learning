@@ -8,8 +8,8 @@ import os
 import json
 from typing import List, Dict, Any
 
-from project_name.models.classification_base_model import CNNClassifier
-from project_name.models.localization_base_model import cnn_model
+from road_sign_detection.models.classification_base_model import CNNClassifier
+from road_sign_detection.models.localization_base_model import cnn_model
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -58,7 +58,7 @@ preprocess_classification = transforms.Compose([
 ])
 
 # Paths
-root: str = os.getcwd() + '/project_name/data/tt100k_2021/'
+root: str = os.getcwd() + '/road_sign_detection/data/tt100k_2021/'
 annotations_pth: str = root + 'annotations_all.json'
 traffic_signs_pth: str = root + '/marks/'
 
@@ -75,7 +75,7 @@ async def root() -> RedirectResponse:
 
 
 @app.post("/predict", response_model=Dict[str, Any])
-async def predict(file: UploadFile = File(...)) -> Dict[str, Any]:
+async def predict(file: UploadFile = File(..., description="Upload a .jpg image of a traffic scene")) -> Dict[str, Any]:
     """
     Predicts bounding box coordinates and traffic sign types from an uploaded image.
 

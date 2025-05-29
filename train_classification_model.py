@@ -1,6 +1,6 @@
 """
 Dataset folder should be located under
-Applied-Machine-Learning/project_name/data/tt100k_2021.
+Applied-Machine-Learning/road_sign_detection/data/tt100k_2021.
 Make sure this is the case, otherwise it will not work.
 """
 import os
@@ -14,8 +14,8 @@ from torch.utils.data import DataLoader, random_split
 from torchvision import transforms
 from tqdm import tqdm
 
-from project_name.models.classification_base_model import CNNClassifier
-from project_name.data.dataset_loader import TT100KSignDataset
+from road_sign_detection.models.classification_base_model import CNNClassifier
+from road_sign_detection.data.dataset_loader import TT100KSignDataset
 
 
 class DatasetPreparer:
