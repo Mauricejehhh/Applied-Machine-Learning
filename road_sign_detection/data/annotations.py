@@ -37,23 +37,23 @@ def check_annotations(root: str,
         tv_split = len(train_annotations['imgs']) / len(annotations['imgs']) * 100
         t_split = len(test_annotations['imgs']) / len(annotations['imgs']) * 100
 
-        if abs(tv_split - (train_size * 100)) < 1.0 and \
+        if abs(tv_split - ((train_size + val_size) * 100)) < 1.0 and \
            abs(t_split - (test_size * 100)) < 1.0:
             print('Found annotation files with the following matching sizes:',
-                  f'Train/Val size: {tv_split:.2f}%',
-                  f'Test size: {t_split:.2f}%')
+                  f'\n Train/Val size: {tv_split:.2f}%',
+                  f'\n Test size: {t_split:.2f}%')
             return
     else:
         print('No annotations file has been found yet.')
 
     print('Creating new annotation files with the following sizes:',
-          f'Train/Val size: {train_size:.2f}%',
-          f'Test size: {test_size:.2f}%')
+          f'\n Train/Val size: {train_size}',
+          f'\n Test size: {test_size}')
 
     all_img_ids = list(annotations['imgs'].keys())
     train_val_ids, test_ids = train_test_split(
         all_img_ids,
-        train_size=train_size,
+        train_size=train_size + val_size,
         test_size=test_size,
         random_state=42
     )
@@ -77,12 +77,12 @@ def check_annotations(root: str,
     assert total_split == original, \
         f'Incorrect split. Got sum of {total_split}, expected {original}'
 
-    with open(train_anno_path, 'r') as f:
+    with open(train_anno_path, 'w') as f:
         json.dump(train_val_annos, f, indent=2)
 
-    with open(test_anno_path, 'r') as f:
+    with open(test_anno_path, 'w') as f:
         json.dump(test_annos, f, indent=2)
 
     print('New splits for annotations have been created!')
-    print(f'Test/Val images: {train_len}')
-    print(f'Test/Val images: {test_len}')
+    print(f'Amount of train/val images: {train_len}')
+    print(f'Amount of test images: {test_len}')
