@@ -1,8 +1,3 @@
-"""
-Dataset folder should be located under
-Applied-Machine-Learning/road_sign_detection/data/tt100k_2021.
-Make sure this is the case, otherwise it will not work.
-"""
 import os
 import json
 from typing import Tuple
@@ -10,36 +5,22 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, Subset
 from torchvision import transforms
 from tqdm import tqdm
-
+from sklearn.model_selection import KFold
 from road_sign_detection.models.classification_base_model import CNNClassifier
 from road_sign_detection.data.dataset_loader import TT100KSignDataset
 
 
 class DatasetPreparer:
-    """
-    Handles creation of filtered annotation JSON file based on train IDs.
-    """
-
     def __init__(self, data_root: str) -> None:
         self.data_root = data_root
-        self.annos_path = os.path.join(data_root,
-                                       'annotations_all.json')
-        self.filtered_path = os.path.join(data_root,
-                                          'filtered_annotations.json')
-        self.ids_path = os.path.join(data_root,
-                                     'train',
-                                     'ids.txt')
+        self.annos_path = os.path.join(data_root, 'annotations_all.json')
+        self.filtered_path = os.path.join(data_root, 'filtered_annotations.json')
+        self.ids_path = os.path.join(data_root, 'train', 'ids.txt')
 
     def prepare(self) -> str:
-        """
-        Creates a filtered annotation file if it doesn't exist.
-
-        Returns:
-            str: Path to the filtered annotations file.
-        """
         if not os.path.exists(self.filtered_path):
             print('Creating a new .json file for training ids.')
             with open(self.ids_path, 'r') as f:
@@ -49,8 +30,7 @@ class DatasetPreparer:
                 annos = json.load(f)
 
             filtered_imgs = {
-                img_id: img_data for img_id,
-                img_data in annos['imgs'].items() if img_id in ids
+                img_id: img_data for img_id, img_data in annos['imgs'].items() if img_id in ids
             }
 
             train_annotations = {
@@ -65,16 +45,15 @@ class DatasetPreparer:
 
 
 class DataModule:
-    """
-    Handles dataset loading, transformation, and splitting.
-    """
-
-    def __init__(self, annotation_path: str,
+    def __init__(self,
+                 annotation_path: str,
                  data_root: str,
-                 batch_size: int = 32) -> None:
+                 batch_size: int = 32,
+                 num_folds: int = 5):
         self.annotation_path = annotation_path
         self.data_root = data_root
         self.batch_size = batch_size
+        self.num_folds = num_folds
 
         self.transform = transforms.Compose([
             transforms.Grayscale(num_output_channels=3),
@@ -83,52 +62,27 @@ class DataModule:
             transforms.Normalize(mean=[0.5] * 3, std=[0.5] * 3),
         ])
 
-    def setup(self) -> Tuple[DataLoader, DataLoader, int]:
-        """
-        Sets up training and validation DataLoaders.
+    def get_dataset(self):
+        return TT100KSignDataset(self.annotation_path, self.data_root, self.transform)
 
-        Returns:
-            Tuple[DataLoader, DataLoader, int]: train_loader, val_loader, num_classes
-        """
-        dataset = TT100KSignDataset(self.annotation_path,
-                                    self.data_root,
-                                    self.transform)
-        train_size = int(0.8 * len(dataset))
-        val_size = len(dataset) - train_size
-        train_data, val_data = random_split(dataset, [train_size, val_size])
-        return (
-            DataLoader(train_data, batch_size=self.batch_size, shuffle=True),
-            DataLoader(val_data, batch_size=self.batch_size, shuffle=True),
-            len(dataset.annotations['types'])
-        )
+    def get_folds(self, dataset):
+        kf = KFold(n_splits=self.num_folds, shuffle=True, random_state=42)
+        return list(kf.split(dataset))
 
 
 class Trainer:
-    """
-    Encapsulates training and validation routines for a model.
-    """
-
-    def __init__(self, model: nn.Module,
-                 device: str,
-                 learning_rate: float = 0.001) -> None:
+    def __init__(self, model: nn.Module, device: str, learning_rate: float = 0.001) -> None:
         self.model = model.to(device)
         self.device = device
         self.loss_fn = nn.CrossEntropyLoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
 
-    def train(self, d_loader: DataLoader, ep_idx: int) -> None:
-        """
-        Trains the model for one epoch.
-
-        Args:
-            d_loader (DataLoader): Training DataLoader.
-            ep_idx (int): Current epoch index.
-        """
+    def train(self, d_loader: DataLoader, ep_idx: int) -> float:
         self.model.train()
         running_loss = 0.0
+        total_batches = 0
 
-        for i, (inputs, labels) in enumerate(tqdm(d_loader,
-                                                  desc=f"Epoch {ep_idx+1} Training")):
+        for i, (inputs, labels) in enumerate(tqdm(d_loader, desc=f"Epoch {ep_idx+1} Training")):
             inputs, labels = inputs.to(self.device), labels.to(self.device)
             self.optimizer.zero_grad()
             outputs = self.model(inputs)
@@ -136,23 +90,14 @@ class Trainer:
             loss.backward()
             self.optimizer.step()
             running_loss += loss.item()
+            total_batches += 1
 
             if i % 10 == 0:
-                print(f'\nBatch {i}: Loss: {running_loss / 10:.4f}')
-                running_loss = 0.0
+                print(f'\nBatch {i}: Loss: {loss.item():.4f}')
+
+        return running_loss / total_batches
 
     def validate(self, data_loader: DataLoader) -> Tuple[float, float]:
-        """
-        Validates the model on the provided validation dataset.
-
-        Args:
-            data_loader (DataLoader): DataLoader for the validation dataset.
-
-        Returns:
-            Tuple[float, float]: A tuple containing:
-                - Average validation loss (float)
-                - Validation accuracy (float)
-        """
         self.model.eval()
         running_loss = 0.0
         correct = 0
@@ -177,51 +122,84 @@ class Trainer:
 
 
 class TrainingPipeline:
-    """
-    Full training pipeline that ties together dataset prep, data loading, training, and saving.
-    """
-
-    def __init__(self, data_root:
-                 str, model_save_path:
-                 str, epochs: int = 1) -> None:
+    def __init__(self, data_root: str, model_save_path: str, epochs: int = 1) -> None:
         self.data_root = data_root
         self.model_save_path = model_save_path
         self.epochs = epochs
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+    @staticmethod
+    def average_state_dicts(state_dicts):
+        avg_state_dict = {}
+        for key in state_dicts[0].keys():
+            avg_state_dict[key] = sum(d[key] for d in state_dicts) / len(state_dicts)
+        return avg_state_dict
+
     def run(self) -> None:
-        """
-        Executes the training pipeline:
-        - Prepares filtered dataset
-        - Loads data
-        - Trains and validates model
-        - Saves trained weights
-        """
         preparer = DatasetPreparer(self.data_root)
         annotation_path = preparer.prepare()
 
-        data_module = DataModule(annotation_path, self.data_root)
-        train_loader, val_loader, num_classes = data_module.setup()
+        data_module = DataModule(annotation_path, self.data_root, num_folds=2)
+        dataset = data_module.get_dataset()
+        folds = data_module.get_folds(dataset)
 
-        model = CNNClassifier(num_classes)
-        trainer = Trainer(model, self.device)
+        all_accuracies = []
+        all_state_dicts = []
 
-        for epoch in range(self.epochs):
-            trainer.train(train_loader, epoch)
-            val_loss, val_accuracy = trainer.validate(val_loader)
-            random_accuracy = 1 / num_classes
-            print(f'Random Guess Accuracy: {random_accuracy:.4f}')
-            if val_accuracy > random_accuracy:
-                print(" Model performs better than random guessing.")
-            else:
-                print(" Model is not yet better than random guessing.")
+        train_losses_all_folds = []
+        val_losses_all_folds = []
 
-        torch.save(model.state_dict(), self.model_save_path)
-        print(f'Model saved to: {self.model_save_path}')
+        for fold_idx, (train_idx, val_idx) in enumerate(folds):
+            print(f"\n--- Fold {fold_idx + 1}/{len(folds)} ---")
+
+            train_subset = Subset(dataset, train_idx)
+            val_subset = Subset(dataset, val_idx)
+
+            train_loader = DataLoader(train_subset,
+                                      batch_size=data_module.batch_size,
+                                      shuffle=True)
+            val_loader = DataLoader(val_subset,
+                                    batch_size=data_module.batch_size,
+                                    shuffle=False)
+
+            model = CNNClassifier(len(dataset.annotations['types']))
+            trainer = Trainer(model, self.device)
+
+            train_losses = []
+            val_losses = []
+
+            for epoch in range(self.epochs):
+                train_loss = trainer.train(train_loader, epoch)
+                val_loss, val_accuracy = trainer.validate(val_loader)
+
+                train_losses.append(train_loss)
+                val_losses.append(val_loss)
+
+            train_losses_all_folds.append(train_losses)
+            val_losses_all_folds.append(val_losses)
+
+            all_accuracies.append(val_accuracy)
+            all_state_dicts.append(model.state_dict())
+
+            fold_model_path = self.model_save_path.replace('.pth', f'_fold{fold_idx + 1}.pth')
+            torch.save(model.state_dict(), fold_model_path)
+            print(f'Model for fold {fold_idx+1} saved to: {fold_model_path}')
+
+        avg_accuracy = sum(all_accuracies) / len(all_accuracies)
+        print(f"\nAverage Cross-Validation Accuracy: {avg_accuracy:.4f}")
+
+        # Average weights from all folds
+        print("\nAveraging model weights across folds...")
+        averaged_state_dict = self.average_state_dicts(all_state_dicts)
+
+        final_model = CNNClassifier(len(dataset.annotations['types']))
+        final_model.load_state_dict(averaged_state_dict)
+        torch.save(final_model.state_dict(), self.model_save_path)
+        print(f"Final averaged model saved to: {self.model_save_path}")
 
 
 if __name__ == "__main__":
     root_path = os.path.join(os.getcwd(), 'data_storage', 'tt100k_2021')
-    model_path = os.path.join(os.getcwd(), 'models', 'model.pth')
+    model_path = os.path.join(os.getcwd(), 'models', 'classification_model_2.pth')
     pipeline = TrainingPipeline(root_path, model_path, epochs=1)
     pipeline.run()
