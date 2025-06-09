@@ -1,8 +1,3 @@
-"""
-Dataset folder should be located under
-Applied-Machine-Learning/road_sign_detection/data/tt100k_2021.
-Make sure this is the case, otherwise it will not work.
-"""
 import os
 from typing import Tuple
 

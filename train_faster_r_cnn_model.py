@@ -85,10 +85,21 @@ class FasterRCNNKFoldTrainer:
             plt.title("Predictions")
             plt.show()
 
+    def plot_train_val_losses(self, loss_history, fold):
+        plt.figure(figsize=(8, 6))
+        plt.plot(range(1, self.epochs + 1), loss_history[fold]['train'], label='Train Loss')
+        plt.plot(range(1, self.epochs + 1), loss_history[fold]['val'], label='Val Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.title(f'Fold {fold+1} Loss')
+        plt.legend()
+        plt.show()
+
     def train(self):
         kfold = KFold(n_splits=self.k_folds, shuffle=True, random_state=42)
         label_map = {v: k for k, v in self.dataset.label_to_idx.items()}
         label_map[0] = "background"
+        loss_history = {}
 
         for fold, (train_ids, val_ids) in enumerate(kfold.split(self.dataset)):
             print(f"\n--- Fold {fold+1}/{self.k_folds} ---")
@@ -101,12 +112,18 @@ class FasterRCNNKFoldTrainer:
             train_loader = DataLoader(train_subset, batch_size=self.batch_size, shuffle=True, collate_fn=collate_fn)
             val_loader = DataLoader(val_subset, batch_size=1, shuffle=False, collate_fn=collate_fn)
 
+            loss_history[fold] = {'train': [], 'val': []}
+
             for epoch in range(self.epochs):
                 model.train()
                 train_loss = 0
-                for images, targets in tqdm(train_loader, desc=f"Fold {fold+1} - Epoch {epoch+1}"):
+                for images, targets in tqdm(
+                    train_loader,
+                    desc=f"Fold {fold+1} - Epoch {epoch+1}"
+                ):
                     images = [img.to(self.device) for img in images]
-                    targets = [{k: v.to(self.device) for k, v in t.items()} for t in targets]
+                    targets = [{k: v.to(self.device) for k, v in t.items()}
+                               for t in targets]
                     loss_dict = model(images, targets)
                     losses = sum(loss for loss in loss_dict.values())
 
@@ -116,12 +133,22 @@ class FasterRCNNKFoldTrainer:
 
                     train_loss += losses.item()
 
+                avg_train_loss = train_loss/len(train_loader)
                 val_loss = self.evaluate(model, val_loader)
-                print(f"Epoch {epoch+1} - Train Loss: {train_loss/len(train_loader):.4f}, Val Loss: {val_loss:.4f}")
 
-            torch.save(model.state_dict(), os.path.join(self.model_dir, f"frcnn_fold{fold+1}.pth"))
+                loss_history[fold]['train'].append(avg_train_loss)
+                loss_history[fold]['val'].append(val_loss)
+
+                print(f'Epoch {epoch+1} - Train Loss: {avg_train_loss:.4f},',
+                      f' Val Loss: {val_loss:.4f}')
+
+            torch.save(
+                model.state_dict(),
+                os.path.join(self.model_dir, f"frcnn_fold{fold+1}.pth")
+            )
             print(f"Saved model for fold {fold+1}")
             self.visualize_predictions(model, val_subset, label_map)
+            self.plot_train_val_losses(loss_history, fold)
 
 
 if __name__ == "__main__":
