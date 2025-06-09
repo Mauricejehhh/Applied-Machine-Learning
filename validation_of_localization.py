@@ -9,6 +9,8 @@ from tqdm import tqdm
 
 from road_sign_detection.models.localization_base_model import BboxRegression
 from road_sign_detection.data.dataset_loader import TT100KDataset
+from road_sign_detection.data.annotations import check_annotations
+
 
 def collate_fn(batch: List[Tuple[torch.Tensor, dict]]) -> Tuple:
     """
@@ -25,10 +27,11 @@ def collate_fn(batch: List[Tuple[torch.Tensor, dict]]) -> Tuple:
 
 # ------------------- Configuration -------------------
 
-# Dataset and model paths
-root: str = os.getcwd() + '/data_storage/tt100k_2021/'
-annotations: str = root + 'filtered_annotations.json'
-model_path: str = os.getcwd() + '/models/localization_model.pth'
+# Paths
+root = os.path.join(os.getcwd(), 'data_storage', 'tt100k_2021')
+check_annotations(root)
+annotations = os.path.join(root, 'test_annotations.json')
+model_path = os.path.join(os.getcwd(), 'models', 'localization_model_final_ensemble.pth')
 
 # Image transformations
 transform = transforms.Compose([

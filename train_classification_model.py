@@ -4,7 +4,6 @@ Applied-Machine-Learning/road_sign_detection/data/tt100k_2021.
 Make sure this is the case, otherwise it will not work.
 """
 import os
-import json
 from typing import Tuple
 
 import torch
@@ -16,6 +15,7 @@ from tqdm import tqdm
 
 from road_sign_detection.models.classification_base_model import CNNClassifier
 from road_sign_detection.data.dataset_loader import TT100KSignDataset
+from road_sign_detection.data.annotations import check_annotations
 
 
 class DatasetPreparer:
@@ -25,42 +25,11 @@ class DatasetPreparer:
 
     def __init__(self, data_root: str) -> None:
         self.data_root = data_root
-        self.annos_path = os.path.join(data_root,
-                                       'annotations_all.json')
-        self.filtered_path = os.path.join(data_root,
-                                          'filtered_annotations.json')
-        self.ids_path = os.path.join(data_root,
-                                     'train',
-                                     'ids.txt')
+        self.annos_path = os.path.join(data_root, 'annotations_all.json')
+        self.filtered_path = os.path.join(data_root, 'train_val_annotations.json')
 
     def prepare(self) -> str:
-        """
-        Creates a filtered annotation file if it doesn't exist.
-
-        Returns:
-            str: Path to the filtered annotations file.
-        """
-        if not os.path.exists(self.filtered_path):
-            print('Creating a new .json file for training ids.')
-            with open(self.ids_path, 'r') as f:
-                ids = set(line.strip() for line in f)
-
-            with open(self.annos_path, 'r') as f:
-                annos = json.load(f)
-
-            filtered_imgs = {
-                img_id: img_data for img_id,
-                img_data in annos['imgs'].items() if img_id in ids
-            }
-
-            train_annotations = {
-                'types': annos['types'],
-                'imgs': filtered_imgs
-            }
-
-            with open(self.filtered_path, 'w') as f:
-                json.dump(train_annotations, f, indent=4)
-
+        check_annotations(self.data_root)
         return self.filtered_path
 
 

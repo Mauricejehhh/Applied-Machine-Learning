@@ -7,6 +7,7 @@ import torch.optim as optim
 import matplotlib.patches as patches
 from road_sign_detection.models.localization_base_model import BboxRegression
 from road_sign_detection.data.dataset_loader import TT100KDataset
+from road_sign_detection.data.annotations import check_annotations
 from torch.utils.data import random_split, DataLoader
 from torchvision import transforms
 from tqdm import tqdm
@@ -28,68 +29,55 @@ def collate_fn(batch: List[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]
     return tuple(zip(*batch))
 
 
-# Set up paths
-root: str = os.getcwd() + '/data_storage/tt100k_2021/'
-annotations: str = root + 'annotations_all.json'
-filtered_annotations: str = root + 'filtered_annotations.json'
-ids_file: str = root + 'train/ids.txt'
-model_path: str = os.getcwd() + '/models/localization_model.pth'
+class KFoldTrainer:
+    def __init__(self, root: str, k_splits: int = 5, epochs: int = 5, batch_size: int = 4, lr: float = 0.001):
+        self.root = root
+        self.epochs = epochs
+        self.k_splits = k_splits
+        self.batch_size = batch_size
+        self.lr = lr
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.model_base_path = os.path.join(os.getcwd(), 'models', 'localization_model')
+        os.makedirs(os.path.dirname(self.model_base_path), exist_ok=True)
 
-# Filter annotations by train IDs
-if not os.path.exists(filtered_annotations):
-    print('Creating a new .json file for training ids.')
-    with open(ids_file, 'r') as f:
-        ids = set(line.strip() for line in f)
+        self.transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225])
+        ])
 
-    with open(annotations, 'r') as f:
-        annos = json.load(f)
+        self.inv_normalize = transforms.Normalize(
+            mean=[-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
+            std=[1 / 0.229, 1 / 0.224, 1 / 0.225]
+        )
 
-    filtered_imgs = {
-        img_id: img_data
-        for img_id, img_data in annos['imgs'].items()
-        if img_id in ids
-    }
+        self.root = root
+        self._filter_annotations()
+        self.filtered_annotations_path = os.path.join(
+            root, 'train_val_annotations.json'
+        )
 
-    print(f'Found {len(filtered_imgs)} training images.')
+        self.dataset = TT100KDataset(self.filtered_annotations_path, root, self.transform)
 
-    train_annotations = {
-        'types': annos['types'],
-        'imgs': filtered_imgs
-    }
+    def _filter_annotations(self):
+        check_annotations(self.root)
 
-    with open(filtered_annotations, 'w') as f:
-        json.dump(train_annotations, f, indent=4)
+    def train(self):
+        kf = KFold(n_splits=self.k_splits, shuffle=True, random_state=42)
 
-# Define transforms
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225]
-    )
-])
+        for fold_idx, (train_idx, val_idx) in enumerate(kf.split(self.dataset)):
+            print(f"\n=== Fold {fold_idx + 1}/{self.k_splits} ===")
 
-inv_normalize = transforms.Normalize(
-    mean=[-0.485/0.229, -0.456/0.224, -0.406/0.225],
-    std=[1/0.229, 1/0.224, 1/0.225]
-)
+            train_loader = DataLoader(Subset(self.dataset, train_idx),
+                                      batch_size=self.batch_size,
+                                      shuffle=True,
+                                      collate_fn=collate_fn)
 
-# Load and split dataset
-tt100k_data = TT100KDataset(filtered_annotations, root, transform)
-t_size: int = int(0.8 * len(tt100k_data))
-v_size: int = len(tt100k_data) - t_size
-train_split, val_split = random_split(tt100k_data, [t_size, v_size])
-subset = torch.utils.data.Subset(train_split, range(4))
-loader = DataLoader(subset, batch_size=4, collate_fn=collate_fn)
-t_loader = DataLoader(train_split,
-                      batch_size=4,
-                      shuffle=True,
-                      collate_fn=collate_fn)
-v_loader = DataLoader(val_split,
-                      batch_size=4,
-                      shuffle=False,
-                      collate_fn=collate_fn)
+            val_loader = DataLoader(Subset(self.dataset, val_idx),
+                                    batch_size=self.batch_size,
+                                    shuffle=False,
+                                    collate_fn=collate_fn)
 
 # Initialize training loop parameters
 epochs: int = 1
