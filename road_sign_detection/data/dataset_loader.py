@@ -4,6 +4,52 @@ from typing import Optional, Callable, Tuple, Dict, List
 import torch
 from torch.utils.data import Dataset
 from PIL import Image, Image as PILImage
+import torchvision.transforms.functional as F
+import random
+
+
+class TT100KFRCNNDataset(Dataset):
+    def __init__(self, annotations_file, root_dir, transform=None):
+        with open(annotations_file, 'r') as f:
+            self.annotations = json.load(f)
+
+        self.image_ids = list(self.annotations['imgs'].keys())
+        self.root_dir = root_dir
+        self.labels = sorted(self.annotations["types"])
+        self.label_to_idx = {label: idx + 1 for idx, label in enumerate(self.labels)}  # COCO starts from 1
+        self.transform = transform
+
+    def __getitem__(self, idx):
+        img_id = self.image_ids[idx]
+        img_data = self.annotations['imgs'][img_id]
+        img_path = os.path.join(self.root_dir, img_data['path'])
+        image = Image.open(img_path).convert("RGB")
+        w, h = image.size
+
+        boxes, labels = [], []
+        for obj in img_data['objects']:
+            bbox = obj['bbox']
+            category = obj['category']
+            xmin = bbox['xmin']
+            ymin = bbox['ymin']
+            xmax = bbox['xmax']
+            ymax = bbox['ymax']
+            boxes.append([xmin, ymin, xmax, ymax])
+            labels.append(self.label_to_idx[category])
+
+        target = {
+            'boxes': torch.tensor(boxes, dtype=torch.float32),
+            'labels': torch.tensor(labels, dtype=torch.int64),
+            'image_id': torch.tensor([idx])
+        }
+
+        if self.transform:
+            image = self.transform(image)
+
+        return image, target
+
+    def __len__(self):
+        return len(self.image_ids)
 
 
 class TT100KFRCNNDataset(Dataset):
