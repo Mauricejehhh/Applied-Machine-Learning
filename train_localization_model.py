@@ -44,13 +44,13 @@ class KFoldTrainer:
             std=[1 / 0.229, 1 / 0.224, 1 / 0.225]
         )
 
-        self.annotations_path = os.path.join(root, 'annotations_all.json')
+        self.root = root
         self._filter_annotations()
         self.train_annotations = os.path.join(root, 'train_val_annotations.json')
         self.dataset = TT100KDataset(self.train_annotations, root, self.transform)
 
     def _filter_annotations(self):
-        check_annotations()
+        check_annotations(self.root)
 
     def train(self):
         kf = KFold(n_splits=self.k_splits, shuffle=True, random_state=42)
