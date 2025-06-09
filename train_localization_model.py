@@ -13,6 +13,7 @@ from typing import List, Tuple, Dict
 
 from road_sign_detection.models.localization_base_model import BboxRegression
 from road_sign_detection.data.dataset_loader import TT100KDataset
+from road_sign_detection.data.annotations import check_annotations
 
 
 def collate_fn(batch: List[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]
@@ -44,33 +45,18 @@ class KFoldTrainer:
         )
 
         self.annotations_path = os.path.join(root, 'annotations_all.json')
-        self.filtered_annotations_path = os.path.join(root, 'filtered_annotations.json')
-        self.ids_file = os.path.join(root, 'train', 'ids.txt')
-
         self._filter_annotations()
-        self.dataset = TT100KDataset(self.filtered_annotations_path, root, self.transform)
+        self.train_annotations = os.path.join(root, 'train_val_annotations.json')
+        self.dataset = TT100KDataset(self.train_annotations, root, self.transform)
 
     def _filter_annotations(self):
-        if not os.path.exists(self.filtered_annotations_path):
-            print("Filtering annotations based on train IDs...")
-            with open(self.ids_file, 'r') as f:
-                ids = set(line.strip() for line in f)
-
-            with open(self.annotations_path, 'r') as f:
-                annotations = json.load(f)
-
-            filtered_imgs = {img_id: img_data for img_id, img_data in annotations['imgs'].items() if img_id in ids}
-
-            filtered_data = {
-                'types': annotations['types'],
-                'imgs': filtered_imgs
-            }
-
-            with open(self.filtered_annotations_path, 'w') as f:
-                json.dump(filtered_data, f, indent=4)
+        check_annotations()
 
     def train(self):
         kf = KFold(n_splits=self.k_splits, shuffle=True, random_state=42)
+
+        train_losses_all_folds = []
+        val_losses_all_folds = []
 
         for fold_idx, (train_idx, val_idx) in enumerate(kf.split(self.dataset)):
             print(f"\n=== Fold {fold_idx + 1}/{self.k_splits} ===")
@@ -89,20 +75,45 @@ class KFoldTrainer:
             optimizer = optim.Adam(model.parameters(), lr=self.lr)
             loss_fn = nn.SmoothL1Loss()
 
+            train_losses = []
+            val_losses = []
+
             for epoch in range(self.epochs):
                 print(f"\nEpoch [{epoch + 1}/{self.epochs}]")
-                self._train_one_epoch(model, train_loader, loss_fn, optimizer)
+                avg_train_loss = self._train_one_epoch(model, train_loader, loss_fn, optimizer)
+                avg_val_loss = self._validate(model, val_loader, loss_fn)
+                print(f'Fold {fold_idx + 1} Train Loss: {avg_train_loss:.4f}')
+                print(f'Fold {fold_idx + 1} Validation Loss: {avg_val_loss:.4f}')
 
-            avg_val_loss = self._validate(model, val_loader, loss_fn)
-            print(f'Fold {fold_idx + 1} Validation Loss: {avg_val_loss:.4f}')
+                train_losses.append(avg_train_loss)
+                val_losses.append(avg_val_loss)
+            
+            train_losses_all_folds.append(train_losses)
+            val_losses_all_folds.append(val_losses)
 
             model_path = f"{self.model_base_path}_fold{fold_idx + 1}.pth"
             torch.save(model.state_dict(), model_path)
             print(f"Model saved to {model_path}")
+        
+        self._plot_losses(train_losses_all_folds, val_losses_all_folds)
+
+    def _plot_losses(self, train_losses_all_folds, val_losses_all_folds):
+        for fold_idx, (train_losses, val_losses) in enumerate(
+            zip(train_losses_all_folds, val_losses_all_folds)
+        ):
+            plt.figure(figsize=(8, 5))
+            plt.plot(range(1, len(train_losses) + 1), train_losses, label='Training Loss')
+            plt.plot(range(1, len(val_losses) + 1), val_losses, label='Validation Loss')
+            plt.title(f'Fold {fold_idx + 1} Train/Val Losses')
+            plt.xlabel('Epoch')
+            plt.ylabel('Loss')
+            plt.legend()
+            plt.show()
 
     def _train_one_epoch(self, model, dataloader, loss_fn, optimizer):
         model.train()
         running_loss = 0.0
+        running_total_loss = 0.0
 
         for i, (images, targets) in enumerate(tqdm(dataloader)):
             images = torch.stack(images).to(self.device)
@@ -115,10 +126,13 @@ class KFoldTrainer:
             optimizer.step()
 
             running_loss += loss.item()
+            running_total_loss += loss.item()
 
             if i % 10 == 0 and i > 0:
                 print(f"Batch {i}: Avg Loss = {running_loss / 10:.6f}")
                 running_loss = 0.0
+
+        return running_total_loss / len(dataloader)
 
     def _validate(self, model, dataloader, loss_fn):
         model.eval()

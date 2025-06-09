@@ -7,15 +7,16 @@ from torchvision import transforms
 from typing import Tuple
 from tqdm import tqdm
 from sklearn.metrics import classification_report, confusion_matrix
-
 from road_sign_detection.models.classification_base_model import CNNClassifier
 from road_sign_detection.data.dataset_loader import TT100KSignDataset
+from road_sign_detection.data.annotations import check_annotations
 
 # ------------------- Configuration -------------------
 
 # Dataset and model paths
 root: str = os.path.join(os.getcwd(), 'data_storage', 'tt100k_2021')
-annotations: str = os.path.join(root, 'filtered_test_annotations.json')
+check_annotations(root)
+annotations: str = os.path.join(root, 'test_annotations.json')
 model_path: str = os.path.join(os.getcwd(), 'models', 'classification_model_2_fold5.pth')  # Final averaged model
 
 # Image transformation

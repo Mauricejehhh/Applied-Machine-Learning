@@ -1,17 +1,18 @@
 # frcnn_kfold_trainer.py
+import os
 import torch
+import numpy as np
+import matplotlib.pyplot as plt
+import random
+import torchvision.transforms.functional as F
 from torch.utils.data import DataLoader, Subset
 from sklearn.model_selection import KFold
 from torchvision.models.detection import fasterrcnn_resnet50_fpn
-import os
 from tqdm import tqdm
-import numpy as np
-import matplotlib.pyplot as plt
 from torchvision import transforms as T
-import torchvision.transforms.functional as F
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from road_sign_detection.data.dataset_loader import TT100KFRCNNDataset
-import random
+from road_sign_detection.data.annotations import check_annotations
 
 
 def get_transform(train: bool):
@@ -84,10 +85,21 @@ class FasterRCNNKFoldTrainer:
             plt.title("Predictions")
             plt.show()
 
+    def plot_train_val_losses(self, loss_history, fold):
+        plt.figure(figsize=(8, 6))
+        plt.plot(range(1, self.epochs + 1), loss_history[fold]['train'], label='Train Loss')
+        plt.plot(range(1, self.epochs + 1), loss_history[fold]['val'], label='Val Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.title(f'Fold {fold+1} Loss')
+        plt.legend()
+        plt.show()
+
     def train(self):
         kfold = KFold(n_splits=self.k_folds, shuffle=True, random_state=42)
         label_map = {v: k for k, v in self.dataset.label_to_idx.items()}
         label_map[0] = "background"
+        loss_history = {}
 
         for fold, (train_ids, val_ids) in enumerate(kfold.split(self.dataset)):
             print(f"\n--- Fold {fold+1}/{self.k_folds} ---")
@@ -100,12 +112,18 @@ class FasterRCNNKFoldTrainer:
             train_loader = DataLoader(train_subset, batch_size=self.batch_size, shuffle=True, collate_fn=collate_fn)
             val_loader = DataLoader(val_subset, batch_size=1, shuffle=False, collate_fn=collate_fn)
 
+            loss_history[fold] = {'train': [], 'val': []}
+
             for epoch in range(self.epochs):
                 model.train()
                 train_loss = 0
-                for images, targets in tqdm(train_loader, desc=f"Fold {fold+1} - Epoch {epoch+1}"):
+                for images, targets in tqdm(
+                    train_loader,
+                    desc=f"Fold {fold+1} - Epoch {epoch+1}"
+                ):
                     images = [img.to(self.device) for img in images]
-                    targets = [{k: v.to(self.device) for k, v in t.items()} for t in targets]
+                    targets = [{k: v.to(self.device) for k, v in t.items()}
+                               for t in targets]
                     loss_dict = model(images, targets)
                     losses = sum(loss for loss in loss_dict.values())
 
@@ -115,18 +133,30 @@ class FasterRCNNKFoldTrainer:
 
                     train_loss += losses.item()
 
+                avg_train_loss = train_loss/len(train_loader)
                 val_loss = self.evaluate(model, val_loader)
-                print(f"Epoch {epoch+1} - Train Loss: {train_loss/len(train_loader):.4f}, Val Loss: {val_loss:.4f}")
 
-            torch.save(model.state_dict(), os.path.join(self.model_dir, f"frcnn_fold{fold+1}.pth"))
+                loss_history[fold]['train'].append(avg_train_loss)
+                loss_history[fold]['val'].append(val_loss)
+
+                print(f'Epoch {epoch+1} - Train Loss: {avg_train_loss:.4f},',
+                      f' Val Loss: {val_loss:.4f}')
+
+            torch.save(
+                model.state_dict(),
+                os.path.join(self.model_dir, f"frcnn_fold{fold+1}.pth")
+            )
             print(f"Saved model for fold {fold+1}")
             self.visualize_predictions(model, val_subset, label_map)
+            self.plot_train_val_losses(loss_history, fold)
 
 
 if __name__ == "__main__":
-    data_root = "data_storage/tt100k_2021"
-    anno_path = f"{data_root}/filtered_annotations.json"
-    dataset = TT100KFRCNNDataset(annotations_file=anno_path, root_dir=data_root, transform=get_transform(train=True))
+    root_path = os.path.join(os.getcwd(), 'data_storage', 'tt100k_2021')
+    # Splits default to 0.70/0.15/0.15, set the splits as arguments
+    check_annotations(root_path)
+    train_path = os.path.join(root_path, 'train_val_annotations.json')
+    dataset = TT100KFRCNNDataset(annotations_file=train_path, root_dir=root_path, transform=get_transform(train=True))
     num_classes = len(dataset.label_to_idx) + 1  # +1 for background class
 
     trainer = FasterRCNNKFoldTrainer(dataset, num_classes=num_classes, k_folds=5, epochs=5)

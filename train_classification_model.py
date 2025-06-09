@@ -1,46 +1,29 @@
 import os
-import json
 from typing import Tuple
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
+
 from torch.utils.data import DataLoader, Subset
 from torchvision import transforms
 from tqdm import tqdm
+from matplotlib import pyplot as plt
 from sklearn.model_selection import KFold
+
 from road_sign_detection.models.classification_base_model import CNNClassifier
 from road_sign_detection.data.dataset_loader import TT100KSignDataset
+from road_sign_detection.data.annotations import check_annotations
 
 
 class DatasetPreparer:
     def __init__(self, data_root: str) -> None:
         self.data_root = data_root
         self.annos_path = os.path.join(data_root, 'annotations_all.json')
-        self.filtered_path = os.path.join(data_root, 'filtered_annotations.json')
-        self.ids_path = os.path.join(data_root, 'train', 'ids.txt')
+        self.filtered_path = os.path.join(data_root, 'train_val_annotations.json')
 
     def prepare(self) -> str:
-        if not os.path.exists(self.filtered_path):
-            print('Creating a new .json file for training ids.')
-            with open(self.ids_path, 'r') as f:
-                ids = set(line.strip() for line in f)
-
-            with open(self.annos_path, 'r') as f:
-                annos = json.load(f)
-
-            filtered_imgs = {
-                img_id: img_data for img_id, img_data in annos['imgs'].items() if img_id in ids
-            }
-
-            train_annotations = {
-                'types': annos['types'],
-                'imgs': filtered_imgs
-            }
-
-            with open(self.filtered_path, 'w') as f:
-                json.dump(train_annotations, f, indent=4)
-
+        check_annotations(self.data_root)
         return self.filtered_path
 
 
@@ -78,11 +61,21 @@ class Trainer:
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
 
     def train(self, d_loader: DataLoader, ep_idx: int) -> float:
+        """
+        Trains the model for one epoch.
+
+        Args:
+            d_loader (DataLoader): Training DataLoader.
+            ep_idx (int): Current epoch index.
+        """
         self.model.train()
         running_loss = 0.0
-        total_batches = 0
+        running_total_loss = 0.0
 
-        for i, (inputs, labels) in enumerate(tqdm(d_loader, desc=f"Epoch {ep_idx+1} Training")):
+        for i, (inputs, labels) in enumerate(tqdm(
+            d_loader,
+            desc=f"Epoch {ep_idx + 1} Training")
+        ):
             inputs, labels = inputs.to(self.device), labels.to(self.device)
             self.optimizer.zero_grad()
             outputs = self.model(inputs)
@@ -90,12 +83,17 @@ class Trainer:
             loss.backward()
             self.optimizer.step()
             running_loss += loss.item()
-            total_batches += 1
+            running_total_loss += loss.item()
 
             if i % 10 == 0:
-                print(f'\nBatch {i}: Loss: {loss.item():.4f}')
+                print(f'\nBatch {i}: Loss: {running_loss / 10:.4f}')
+                running_loss = 0.0
 
-        return running_loss / total_batches
+        # Calculate average loss over entire epoch
+        avg_loss = running_total_loss / len(d_loader)
+        print(f'Epoch {ep_idx + 1} Average Training Loss: {avg_loss:.4f}')
+
+        return avg_loss
 
     def validate(self, data_loader: DataLoader) -> Tuple[float, float]:
         self.model.eval()
@@ -122,7 +120,13 @@ class Trainer:
 
 
 class TrainingPipeline:
-    def __init__(self, data_root: str, model_save_path: str, epochs: int = 1) -> None:
+    """ Full training pipeline that ties together dataset prep,
+    data loading, training, and saving.
+    """
+
+    def __init__(self, data_root:
+                 str, model_save_path:
+                 str, epochs: int = 1) -> None:
         self.data_root = data_root
         self.model_save_path = model_save_path
         self.epochs = epochs
@@ -134,6 +138,19 @@ class TrainingPipeline:
         for key in state_dicts[0].keys():
             avg_state_dict[key] = sum(d[key] for d in state_dicts) / len(state_dicts)
         return avg_state_dict
+
+    def plot_losses(self, train_losses_all_folds, val_losses_all_folds):
+        for fold_idx, (train_losses, val_losses) in enumerate(
+            zip(train_losses_all_folds, val_losses_all_folds)
+        ):
+            plt.figure(figsize=(8, 5))
+            plt.plot(range(1, len(train_losses) + 1), train_losses, label='Training Loss')
+            plt.plot(range(1, len(val_losses) + 1), val_losses, label='Validation Loss')
+            plt.title(f'Fold {fold_idx + 1} Train/Val Losses')
+            plt.xlabel('Epoch')
+            plt.ylabel('Loss')
+            plt.legend()
+            plt.show()
 
     def run(self) -> None:
         preparer = DatasetPreparer(self.data_root)
@@ -196,6 +213,9 @@ class TrainingPipeline:
         final_model.load_state_dict(averaged_state_dict)
         torch.save(final_model.state_dict(), self.model_save_path)
         print(f"Final averaged model saved to: {self.model_save_path}")
+
+        # Plot the losses per fold
+        self.plot_losses(train_losses_all_folds, val_losses_all_folds)
 
 
 if __name__ == "__main__":
