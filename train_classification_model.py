@@ -9,9 +9,11 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 import torch.optim as optim
+
 from torch.utils.data import DataLoader, random_split
 from torchvision import transforms
 from tqdm import tqdm
+from matplotlib import pyplot as plt
 
 from road_sign_detection.models.classification_base_model import CNNClassifier
 from road_sign_detection.data.dataset_loader import TT100KSignDataset
@@ -85,7 +87,7 @@ class Trainer:
         self.loss_fn = nn.CrossEntropyLoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
 
-    def train(self, d_loader: DataLoader, ep_idx: int) -> None:
+    def train(self, d_loader: DataLoader, ep_idx: int) -> float:
         """
         Trains the model for one epoch.
 
@@ -95,6 +97,7 @@ class Trainer:
         """
         self.model.train()
         running_loss = 0.0
+        running_total_loss = 0.0
 
         for i, (inputs, labels) in enumerate(tqdm(d_loader,
                                                   desc=f"Epoch {ep_idx+1} Training")):
@@ -105,10 +108,17 @@ class Trainer:
             loss.backward()
             self.optimizer.step()
             running_loss += loss.item()
+            running_total_loss += loss.item()
 
             if i % 10 == 0:
                 print(f'\nBatch {i}: Loss: {running_loss / 10:.4f}')
                 running_loss = 0.0
+
+        # Calculate average loss over entire epoch
+        avg_loss = running_total_loss / len(d_loader)
+        print(f'Epoch {ep_idx + 1} Average Training Loss: {avg_loss:.4f}')
+
+        return avg_loss
 
     def validate(self, data_loader: DataLoader) -> Tuple[float, float]:
         """
@@ -146,8 +156,8 @@ class Trainer:
 
 
 class TrainingPipeline:
-    """
-    Full training pipeline that ties together dataset prep, data loading, training, and saving.
+    """ Full training pipeline that ties together dataset prep,
+    data loading, training, and saving.
     """
 
     def __init__(self, data_root:
@@ -175,15 +185,25 @@ class TrainingPipeline:
         model = CNNClassifier(num_classes)
         trainer = Trainer(model, self.device)
 
+        train_losses = []
+        val_losses = []
+
         for epoch in range(self.epochs):
-            trainer.train(train_loader, epoch)
-            val_loss, val_accuracy = trainer.validate(val_loader)
-            random_accuracy = 1 / num_classes
-            print(f'Random Guess Accuracy: {random_accuracy:.4f}')
-            if val_accuracy > random_accuracy:
-                print(" Model performs better than random guessing.")
-            else:
-                print(" Model is not yet better than random guessing.")
+            train_loss = trainer.train(train_loader, epoch)
+            val_loss, _ = trainer.validate(val_loader)
+
+            train_losses.append(train_loss)
+            val_losses.append(val_loss)
+
+        # plot train and validation losses per epoch
+        plt.figure(figsize=(10, 8))
+        plt.plot(range(self.epochs + 1), train_losses, label='Train Losses')
+        plt.plot(range(self.epochs + 1), val_losses, label='Train Losses')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.title('Train and Validation Loss')
+        plt.legend()
+        plt.show()
 
         torch.save(model.state_dict(), self.model_save_path)
         print(f'Model saved to: {self.model_save_path}')
