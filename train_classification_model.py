@@ -1,5 +1,8 @@
 import os
 from typing import Tuple
+import numpy as np
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
 
 import torch
 import torch.nn as nn
@@ -95,11 +98,14 @@ class Trainer:
 
         return avg_loss
 
-    def validate(self, data_loader: DataLoader) -> Tuple[float, float]:
+    def validate(self, data_loader: DataLoader) -> Tuple[float, float, np.ndarray, np.ndarray]:
         self.model.eval()
         running_loss = 0.0
         correct = 0
         total = 0
+
+        all_preds = []
+        all_labels = []
 
         with torch.no_grad():
             for inputs, labels in tqdm(data_loader, desc="Validation"):
@@ -112,11 +118,15 @@ class Trainer:
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
 
+                all_preds.extend(predicted.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
+
         avg_loss = running_loss / len(data_loader)
         accuracy = correct / total
         print(f'Validation Loss: {avg_loss:.4f}')
         print(f'Validation Accuracy: {accuracy:.4f}')
-        return avg_loss, accuracy
+
+        return avg_loss, accuracy, np.array(all_preds), np.array(all_labels)
 
 
 class TrainingPipeline:
@@ -144,12 +154,21 @@ class TrainingPipeline:
             zip(train_losses_all_folds, val_losses_all_folds)
         ):
             plt.figure(figsize=(8, 5))
-            plt.plot(range(1, len(train_losses) + 1), train_losses, label='Training Loss')
-            plt.plot(range(1, len(val_losses) + 1), val_losses, label='Validation Loss')
+            plt.plot(range(1, len(train_losses) + 1), train_losses, label='Training Loss', marker='o')
+            plt.plot(range(1, len(val_losses) + 1), val_losses, label='Validation Loss', marker='o')
             plt.title(f'Fold {fold_idx + 1} Train/Val Losses')
             plt.xlabel('Epoch')
             plt.ylabel('Loss')
             plt.legend()
+            plt.show()
+
+    def plot_confusion_matrix(self, y_true: np.ndarray, y_pred: np.ndarray, class_names: list):
+            cm = confusion_matrix(y_true, y_pred)
+            plt.figure(figsize=(10, 8))
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=class_names, yticklabels=class_names)
+            plt.xlabel('Predicted Label')
+            plt.ylabel('True Label')
+            plt.title('Confusion Matrix')
             plt.show()
 
     def run(self) -> None:
@@ -185,18 +204,21 @@ class TrainingPipeline:
             train_losses = []
             val_losses = []
 
-            for epoch in range(self.epochs):
-                train_loss = trainer.train(train_loader, epoch)
-                val_loss, val_accuracy = trainer.validate(val_loader)
+        for epoch in range(self.epochs):
+            train_loss = trainer.train(train_loader, epoch)
+            val_loss, val_accuracy, val_preds, val_labels = trainer.validate(val_loader)
 
-                train_losses.append(train_loss)
-                val_losses.append(val_loss)
+            train_losses.append(train_loss)
+            val_losses.append(val_loss)
 
             train_losses_all_folds.append(train_losses)
             val_losses_all_folds.append(val_losses)
 
             all_accuracies.append(val_accuracy)
             all_state_dicts.append(model.state_dict())
+
+            class_names = list(dataset.annotations['types'].keys())
+            self.plot_confusion_matrix(val_labels, val_preds, class_names)
 
             fold_model_path = self.model_save_path.replace('.pth', f'_fold{fold_idx + 1}.pth')
             torch.save(model.state_dict(), fold_model_path)

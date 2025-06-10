@@ -17,7 +17,7 @@ from road_sign_detection.data.annotations import check_annotations
 root: str = os.path.join(os.getcwd(), 'data_storage', 'tt100k_2021')
 check_annotations(root)
 annotations: str = os.path.join(root, 'test_annotations.json')
-model_path: str = os.path.join(os.getcwd(), 'models', 'classification_model_2_fold5.pth')  # Final averaged model
+model_path: str = os.path.join(os.getcwd(), 'models', 'classification_model_2_fold2.pth')  # Final averaged model
 
 # Image transformation
 transform = transforms.Compose([

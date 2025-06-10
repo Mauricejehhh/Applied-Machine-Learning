@@ -71,26 +71,33 @@ All dependencies, including specific versions, are listed in the requirements.tx
 
 ## 📁 Project Structure
 ```bash
-├───data  # Stores .csv
+├───data_storage
 ├───models  # Stores .pth
 ├───road_sign_detection
 │   ├───data
+│       ├───annotations.py
 │       ├───dataset_loader.py
 │       └───dataset_visualizer.py
 │   └───models
 │       ├───classification_base_model.py
 │       └───localization_base_model.py
-├───tests
-│   ├───data
-│   ├───features
-│   ├───models
-│   └───test_main.py
+├───test
+│   ├───test_data
+│       ├───test_annotations.py
+│       └───test_dataset_loader.py
+│   └───test_models
+│       ├───test_classification_base_model.py
+│       └───test_localization_base_model.py
 ├───.gitignore
+├───.gitattributes
 ├───.pre-commit-config.yaml
 ├───main.py
 ├───evaluate_classification_model.py
+├───evaluation_of_classification.py
 ├───requirements.txt
 ├───train_classification_model.py
+├───triain_faster_r_cnn_model.py
+├───training_template
 ├───train_localization_model.py
 ├───validation_of_localization.py
 ├───README.md

@@ -102,8 +102,8 @@ class KFoldTrainer:
             zip(train_losses_all_folds, val_losses_all_folds)
         ):
             plt.figure(figsize=(8, 5))
-            plt.plot(range(1, len(train_losses) + 1), train_losses, label='Training Loss')
-            plt.plot(range(1, len(val_losses) + 1), val_losses, label='Validation Loss')
+            plt.plot(range(1, len(train_losses) + 1), train_losses, label='Training Loss', marker='o')
+            plt.plot(range(1, len(val_losses) + 1), val_losses, label='Validation Loss', marker='o')
             plt.title(f'Fold {fold_idx + 1} Train/Val Losses')
             plt.xlabel('Epoch')
             plt.ylabel('Loss')

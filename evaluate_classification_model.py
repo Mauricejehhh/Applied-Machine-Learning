@@ -177,7 +177,7 @@ def main() -> None:
     annotations_path = os.path.join(root, 'annotations_all.json')
     filtered_annotations = os.path.join(root, 'filtered_test_annotations.json')
     ids_file = os.path.join(root, 'test', 'ids.txt')
-    model_path = os.path.join(os.getcwd(), 'models', 'classi_model.pth')
+    model_path = os.path.join(os.getcwd(), 'models', 'classification_model_2.pth')
 
     if not os.path.exists(filtered_annotations):
         create_filtered_annotations(annotations_path, ids_file,
