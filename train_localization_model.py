@@ -22,8 +22,8 @@ def collate_fn(batch: List[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]
 
 
 class KFoldTrainer:
-    def __init__(self, root: str, k_splits: int = 5, epochs: int = 5, batch_size: int = 4, lr: float = 0.001):
-        self.root = root
+    def __init__(self, data_root: str, k_splits: int = 5, epochs: int = 5, batch_size: int = 4, lr: float = 0.001):
+        self.data_root = data_root
         self.epochs = epochs
         self.k_splits = k_splits
         self.batch_size = batch_size
@@ -44,13 +44,12 @@ class KFoldTrainer:
             std=[1 / 0.229, 1 / 0.224, 1 / 0.225]
         )
 
-        self.root = root
         self._filter_annotations()
-        self.train_annotations = os.path.join(root, 'train_val_annotations.json')
-        self.dataset = TT100KDataset(self.train_annotations, root, self.transform)
+        self.train_annotations = os.path.join(data_root, 'train_val_annotations.json')
+        self.dataset = TT100KDataset(self.train_annotations, data_root, self.transform)
 
     def _filter_annotations(self):
-        check_annotations(self.root)
+        check_annotations(self.data_root)
 
     def train(self):
         kf = KFold(n_splits=self.k_splits, shuffle=True, random_state=42)
@@ -207,7 +206,7 @@ class KFoldTrainer:
 
 
 if __name__ == "__main__":
-    trainer = KFoldTrainer(root=os.path.join(os.getcwd(), 'data_storage', 'tt100k_2021'))
+    trainer = KFoldTrainer(data_root=os.path.join(os.getcwd(), 'data_storage', 'tt100k_2021'))
     trainer.train()
     trainer.save_ensemble_model()
     trainer.visualize_sample_prediction(use_ensemble=True)

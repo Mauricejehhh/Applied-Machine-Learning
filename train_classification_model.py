@@ -2,7 +2,6 @@ import os
 from typing import Tuple
 import numpy as np
 from sklearn.metrics import confusion_matrix
-import seaborn as sns
 
 import torch
 import torch.nn as nn
@@ -163,17 +162,54 @@ class TrainingPipeline:
             plt.show()
 
     def plot_confusion_matrix(self, y_true: np.ndarray, y_pred: np.ndarray, class_names: list):
-            cm = confusion_matrix(y_true, y_pred)
-            plt.figure(figsize=(10, 8))
-            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=class_names, yticklabels=class_names)
-            plt.xlabel('Predicted Label')
-            plt.ylabel('True Label')
-            plt.title('Confusion Matrix')
-            plt.show()
+        unique_labels = np.unique(np.concatenate([y_true, y_pred]))
+        subset_class_names = [class_names[i] for i in unique_labels]
+
+        cm = confusion_matrix(y_true, y_pred, labels=unique_labels)
+        fig, ax = plt.subplots(figsize=(10, 8))
+        im = ax.imshow(cm, interpolation='nearest', cmap='Blues')
+        ax.figure.colorbar(im, ax=ax)
+
+        ax.set(
+            xticks=np.arange(cm.shape[1]),
+            yticks=np.arange(cm.shape[0]),
+            xticklabels=subset_class_names,
+            yticklabels=subset_class_names,
+            ylabel='True Label',
+            xlabel='Predicted Label',
+            title='Confusion Matrix'
+        )
+
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+
+        thresh = cm.max() / 2.
+        for i in range(cm.shape[0]):
+            for j in range(cm.shape[1]):
+                ax.text(j, i, format(cm[i, j], 'd'),
+                        ha="center", va="center",
+                        color="white" if cm[i, j] > thresh else "black")
+
+        fig.tight_layout()
+        plt.show()
+
 
     def run(self) -> None:
         preparer = DatasetPreparer(self.data_root)
         annotation_path = preparer.prepare()
+
+        import json
+        with open(annotation_path, 'r') as f:
+            annos = json.load(f)
+
+        # Check if 'types' is dict or list
+        if isinstance(annos['types'], dict):
+            class_names = list(annos['types'].keys())
+        elif isinstance(annos['types'], list):
+            class_names = annos['types']
+        else:
+            raise ValueError(f"Unexpected type for 'types': {type(annos['types'])}")
+
+        num_classes = len(class_names)
 
         data_module = DataModule(annotation_path, self.data_root, num_folds=2)
         dataset = data_module.get_dataset()
@@ -192,24 +228,24 @@ class TrainingPipeline:
             val_subset = Subset(dataset, val_idx)
 
             train_loader = DataLoader(train_subset,
-                                      batch_size=data_module.batch_size,
-                                      shuffle=True)
+                                    batch_size=data_module.batch_size,
+                                    shuffle=True)
             val_loader = DataLoader(val_subset,
                                     batch_size=data_module.batch_size,
                                     shuffle=False)
 
-            model = CNNClassifier(len(dataset.annotations['types']))
+            model = CNNClassifier(num_classes)
             trainer = Trainer(model, self.device)
 
             train_losses = []
             val_losses = []
 
-        for epoch in range(self.epochs):
-            train_loss = trainer.train(train_loader, epoch)
-            val_loss, val_accuracy, val_preds, val_labels = trainer.validate(val_loader)
+            for epoch in range(self.epochs):
+                train_loss = trainer.train(train_loader, epoch)
+                val_loss, val_accuracy, val_preds, val_labels = trainer.validate(val_loader)
 
-            train_losses.append(train_loss)
-            val_losses.append(val_loss)
+                train_losses.append(train_loss)
+                val_losses.append(val_loss)
 
             train_losses_all_folds.append(train_losses)
             val_losses_all_folds.append(val_losses)
@@ -217,7 +253,6 @@ class TrainingPipeline:
             all_accuracies.append(val_accuracy)
             all_state_dicts.append(model.state_dict())
 
-            class_names = list(dataset.annotations['types'].keys())
             self.plot_confusion_matrix(val_labels, val_preds, class_names)
 
             fold_model_path = self.model_save_path.replace('.pth', f'_fold{fold_idx + 1}.pth')
@@ -231,7 +266,7 @@ class TrainingPipeline:
         print("\nAveraging model weights across folds...")
         averaged_state_dict = self.average_state_dicts(all_state_dicts)
 
-        final_model = CNNClassifier(len(dataset.annotations['types']))
+        final_model = CNNClassifier(num_classes)
         final_model.load_state_dict(averaged_state_dict)
         torch.save(final_model.state_dict(), self.model_save_path)
         print(f"Final averaged model saved to: {self.model_save_path}")

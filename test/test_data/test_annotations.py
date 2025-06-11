@@ -9,8 +9,8 @@ class TestCheckAnnotations(unittest.TestCase):
     def setUp(self) -> None:
         """Set up a temporary directory and write a mock annotations file."""
         self.test_dir = tempfile.TemporaryDirectory()
-        self.root = self.test_dir.name
-        self.full_path = os.path.join(self.root, 'annotations_all.json')
+        self.data_root = self.test_dir.name
+        self.full_path = os.path.join(self.data_root, 'annotations_all.json')
 
         # Create mock annotation data with 100 images
         self.mock_annotations = {
@@ -32,10 +32,10 @@ class TestCheckAnnotations(unittest.TestCase):
         Test that the function creates train/val and test splits,
         and the splits match expected proportions.
         """
-        check_annotations(self.root)
+        check_annotations(self.data_root)
 
-        train_val_path = os.path.join(self.root, 'train_val_annotations.json')
-        test_path = os.path.join(self.root, 'test_annotations.json')
+        train_val_path = os.path.join(self.data_root, 'train_val_annotations.json')
+        test_path = os.path.join(self.data_root, 'test_annotations.json')
 
         self.assertTrue(os.path.exists(train_val_path), "Train/Val file not created")
         self.assertTrue(os.path.exists(test_path), "Test file not created")
@@ -62,7 +62,7 @@ class TestCheckAnnotations(unittest.TestCase):
         os.remove(self.full_path)
 
         with self.assertRaises(FileNotFoundError):
-            check_annotations(self.root)
+            check_annotations(self.data_root)
 
 
 if __name__ == '__main__':
