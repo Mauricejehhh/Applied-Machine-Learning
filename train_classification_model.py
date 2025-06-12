@@ -2,6 +2,7 @@ import os
 from typing import Tuple
 import numpy as np
 from sklearn.metrics import confusion_matrix
+import seaborn as sns
 
 import torch
 import torch.nn as nn
@@ -12,6 +13,7 @@ from torchvision import transforms
 from tqdm import tqdm
 from matplotlib import pyplot as plt
 from sklearn.model_selection import KFold
+from collections import Counter
 
 from road_sign_detection.models.classification_base_model import CNNClassifier
 from road_sign_detection.data.dataset_loader import TT100KSignDataset
@@ -161,36 +163,30 @@ class TrainingPipeline:
             plt.legend()
             plt.show()
 
-    def plot_confusion_matrix(self, y_true: np.ndarray, y_pred: np.ndarray, class_names: list):
-        unique_labels = np.unique(np.concatenate([y_true, y_pred]))
-        subset_class_names = [class_names[i] for i in unique_labels]
+    # def plot_confusion_matrix(self, y_true: np.ndarray, y_pred: np.ndarray, class_names: list, top_n: int = 50):
+    #         class_counts = Counter(y_true)
+    #         most_common = [cls for cls, _ in class_counts.most_common(top_n)]
 
-        cm = confusion_matrix(y_true, y_pred, labels=unique_labels)
-        fig, ax = plt.subplots(figsize=(10, 8))
-        im = ax.imshow(cm, interpolation='nearest', cmap='Blues')
-        ax.figure.colorbar(im, ax=ax)
+    #         mask = np.isin(y_true, most_common)
+    #         y_true_filtered = y_true[mask]
+    #         y_pred_filtered = y_pred[mask]
 
-        ax.set(
-            xticks=np.arange(cm.shape[1]),
-            yticks=np.arange(cm.shape[0]),
-            xticklabels=subset_class_names,
-            yticklabels=subset_class_names,
-            ylabel='True Label',
-            xlabel='Predicted Label',
-            title='Confusion Matrix'
-        )
+    #         labels = sorted(most_common)
+    #         cm = confusion_matrix(y_true_filtered, y_pred_filtered, labels=labels)
+    #         cm = cm.astype('float') / cm.sum(axis=1, keepdims=True)  # Normalize
 
-        plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+    #         subset_class_names = [class_names[i] for i in labels]
+    #         plt.figure(figsize=(18, 14))
+    #         sns.heatmap(cm, annot=False, fmt=".2f", cmap="jet",
+    #                     xticklabels=subset_class_names, yticklabels=subset_class_names)
 
-        thresh = cm.max() / 2.
-        for i in range(cm.shape[0]):
-            for j in range(cm.shape[1]):
-                ax.text(j, i, format(cm[i, j], 'd'),
-                        ha="center", va="center",
-                        color="white" if cm[i, j] > thresh else "black")
-
-        fig.tight_layout()
-        plt.show()
+    #         plt.title(f"Top-{top_n} Most Common Classes - Confusion Matrix")
+    #         plt.xlabel("Predicted Label")
+    #         plt.ylabel("True Label")
+    #         plt.xticks(rotation=90)
+    #         plt.yticks(rotation=0)
+    #         plt.tight_layout()
+    #         plt.show()
 
 
     def run(self) -> None:
@@ -253,7 +249,7 @@ class TrainingPipeline:
             all_accuracies.append(val_accuracy)
             all_state_dicts.append(model.state_dict())
 
-            self.plot_confusion_matrix(val_labels, val_preds, class_names)
+            # self.plot_confusion_matrix(val_labels, val_preds, class_names)
 
             fold_model_path = self.model_save_path.replace('.pth', f'_fold{fold_idx + 1}.pth')
             torch.save(model.state_dict(), fold_model_path)
