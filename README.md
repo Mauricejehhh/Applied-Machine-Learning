@@ -1,5 +1,4 @@
 # Applied Machine Learning: TT100K Traffic Sign Detector & Classifier
-
 This project implements a machine learning pipeline using Convolutional Neural Networks (CNNs) to detect and classify traffic signs in images from the TT100K dataset. The system comprises two main components: a bounding box regression model for localizing signs in full images, and a classification model that recognizes individual sign types cropped from those images. Additionally, it includes a FastAPI web server for interactive predictions and multiple scripts for training, evaluating, and visualizing both models.
 
 Key features include:
@@ -13,24 +12,23 @@ Key features include:
     Python scripts to train and evaluate both classification and localization pipelines.
 
 ## The Dataset and Preprocessing
-The project defines custom PyTorch Dataset classes that facilitate efficient loading and preparation of the TT100K dataset, tailored for both classification and localization tasks.
+The **TT100K (Tsinghua-Tencent 100K)** dataset is a large-scale traffic sign dataset intended for research in computer vision, specifically traffic sign classification and localization. This project includes a structured and modular pipeline for managing the **TT100K data**, using a combination of preprocessing, custom PyTorch Dataset classes, and visualization utilities. Together, these components streamline the process of loading, transforming, and visualizing the dataset for both object detection and classification tasks.
 
-**TT100KDataset**
-This dataset class is used for the localization task. It loads full-resolution images and parses corresponding bounding box annotations from JSON files. Each item returned by this dataset includes the raw image and its list of bounding boxes (formatted as xmin, ymin, xmax, ymax). The class supports splitting the data into train and validation sets and includes options for applying image transformations (e.g., resizing, normalization) on-the-fly. This makes it suitable for training the bounding box regression model without any need for separate preprocessing scripts.
+### Obtaining the Dataset
+To obtain the **TT100K dataset**, navigate to the official webpage: https://cg.cs.tsinghua.edu.cn/traffic-sign/. On the site, locate the 2021 dataset version and follow the download instructions. The dataset is typically provided as a compressed archive containing the image files and an annotation JSON file (commonly named *annotations_all.json*). Once downloaded, extract the contents into a working directory. Ensure that the JSON annotation file and the images maintain the original structure, as the data loading scripts rely on consistent file paths.
 
-**TT100KSignDataset**
-This class is designed specifically for the classification task. Rather than returning full images, it crops out individual traffic signs from the original images based on the bounding boxes and returns each cropped image with its associated class label. This allows efficient training of the classifier on clean, focused sign patches. Like TT100KDataset, this class handles all annotation parsing and image I/O internally, and is fully compatible with PyTorch’s DataLoader.
+### Annotation handling
+Annotation management is handled through the *annotations.py* script, which includes the **check_annotations()** function. This function plays a critical role in validating and preparing the dataset. It first checks for the existence of the main annotation file. If the required split files for training/validation and testing are not found, the script automatically generates them using stratified sampling via *train_test_split()* from the scikit-learn library. The default split ratio allocates 70% of the data for training, 15% for validation, and 15% for testing. To ensure reproducibility and correctness, the function also checks the consistency of image counts after the split and raises an error if any discrepancy is detected. If the split files already exist and match the expected proportions, they are reused, thereby saving time and avoiding redundant processing.
 
-**Visualization Tools**
-The dataset_visualizer.py module provides utilities for visualizing images and their annotations. This is critical for debugging, verifying annotation integrity, and gaining qualitative insights into the dataset. It allows users to:
+### Creating Custom Dataset Classes
+The data loading logic is implemented in *dataloader.py*, where several custom PyTorch Dataset classes are defined, each tailored for specific tasks. The **TT100KDataset** class is designed for object localization. It loads full-resolution images and extracts their corresponding bounding boxes from the annotations. These bounding boxes are normalized relative to the image dimensions and returned along with class labels in a dictionary format. The class also supports transformations like resizing and normalization, applied on-the-fly to each image. This setup allows users to train localization models such as bounding box regressors directly from the raw data without requiring external preprocessing steps.
 
-    Inspect random image samples with bounding boxes.
+In contrast, the **TT100KSignDataset** class is optimized for classification. Rather than loading entire images, it parses the annotation data to crop individual traffic signs from their parent images. Each sample consists of a cropped image patch and its associated class label. This approach is particularly well-suited for training classifiers that need focused, background-free representations of traffic signs. The class handles image cropping and label assignment internally, enabling efficient and seamless integration into any PyTorch-based training pipeline.
 
-    Confirm correct parsing of JSON annotations.
+Additionally, the **TT100KFRCNNDataset** class is included to support detection frameworks like Faster R-CNN. This variant returns the full image along with bounding boxes in absolute pixel coordinates and their respective class labels. It is compatible with object detection models that require exact positional information rather than normalized bounding boxes.
 
-    Evaluate class balance and dataset structure.
-
-The visualizations are generated using matplotlib, and output clear graphical representations with bounding boxes and overlaid class labels. This is valuable for both development and presentations.
+### Visualization Tools
+Lastly, an convenient component of the project is the *dataset_visualizer.py* module, which provides tools for visual inspection of the dataset. This module leverages matplotlib to render images annotated with bounding boxes and class labels. Such visualizations are invaluable for verifying annotation correctness, understanding class distributions, and debugging issues related to data parsing. The ability to see samples with overlaid annotations greatly aids in quality assurance and can also be used to communicate insights about the dataset during presentations or collaborative work.
 
 ## The Classification Model
 ### The Model's Architecture
@@ -99,9 +97,41 @@ The evaluation results demonstrate the localization model’s effectiveness, con
 ### Implementation Notes and Recommendations
 In short, the combination of the frozen ResNet-50 backbone with a lightweight regression head forms a robust and efficient localization model architecture. The cross-validation training framework, along with ensemble averaging, enhances reliability and generalization. Visualization tools and statistical evaluation methods provide comprehensive insight into model performance, supporting thorough analysis and interpretation of results.
 
+## The R-CNN Model 
+### The Model's Architecture
+The core of the object detection system is the Faster R-CNN architecture, which is a two-stage detector combining both region proposal and classification tasks efficiently. The backbone of the model is ResNet-50, a deep convolutional neural network known for its residual connections that help alleviate the vanishing gradient problem and allow training of very deep networks. This backbone extracts rich, hierarchical feature representations from input images. To enhance detection at multiple scales, especially important for objects of varying sizes such as road signs, the backbone is augmented with a *Feature Pyramid Network* (FPN). The FPN constructs a multi-scale feature pyramid by combining low-level, high-resolution features with high-level, semantically rich features, enabling the detector to recognize both small and large objects effectively.
 
+Following feature extraction, the model employs a *Region Proposal Network* (RPN) that scans the feature maps to generate candidate object bounding boxes called proposals. These proposals are then fed into the second stage of the detector where *RoI* (Region of Interest) pooling extracts fixed-size feature representations for each proposal. These features are passed to fully connected layers that perform classification and bounding box regression, refining both the class labels and the localization of the proposals.
 
-# Fast API
+To tailor the model for the specific TT100K road sign detection task, the original classification head of Faster R-CNN is replaced with a custom FastRCNNPredictor that matches the number of classes in the dataset, including the background class. This replacement allows the model to leverage pretrained features learned from large-scale datasets like COCO, while adapting the final layers to recognize the unique categories present in the road sign dataset. This architecture balance between pretrained backbone and a task-specific prediction head facilitates faster convergence and improved generalization, especially when the available training data is limited.
+
+### Transformation of the Dataset
+To ensure effective learning, the dataset undergoes a transformation process that standardizes input images and applies augmentations to improve model generalization. The base transformation pipeline converts images to PyTorch tensors. During training, additional augmentations are applied, including random horizontal flips, slight color jitter (altering brightness, contrast, and saturation), and small random rotations. These augmentations expose the model to diverse viewing conditions, enhancing its robustness to real-world variations.
+
+For evaluation and inference, only the conversion to tensors is applied to ensure consistency and avoid introducing randomness that could distort predictions. This clear distinction between training and evaluation transformations helps maintain the integrity of validation metrics.
+
+### Training Pipeline
+The training process for the Faster R-CNN model is designed to ensure robust and reliable learning through a comprehensive *K-Fold cross-validation* pproach. This method divides the dataset into multiple folds, typically five, allowing the model to be trained and validated on different subsets of the data. For each fold, a fresh instance of the Faster R-CNN model with a **ResNet-50** backbone and a custom prediction head is initialized. This model is trained using the Adam optimizer with a carefully selected learning rate, updating only those parameters that require gradients, primarily the classification and bounding box regression heads.
+
+The training pipeline applies a series of data augmentations such as random horizontal flips, color jitter, and small rotations during the training phase. These augmentations enhance the model’s ability to generalize by exposing it to varied visual conditions. Each epoch involves iterating over batches of images and their corresponding annotations, computing the losses that include classification loss, box regression loss, and other components, which are then summed to obtain the total training loss.
+
+To manage potential issues like GPU out-of-memory errors, the training loop includes error handling that skips problematic batches and clears the CUDA cache, maintaining training stability. After each epoch, the model is evaluated on a held-out validation set for that fold, calculating the average validation loss to monitor overfitting and performance improvements. Throughout training, loss metrics for both training and validation phases are logged and plotted, providing valuable visual feedback on learning progress.
+
+At the end of training each fold, the model state is saved. Once all folds are trained, their weights are averaged to produce a final, more generalized model that smooths out fold-to-fold variations. This averaging approach, combined with the careful training setup and augmentations, helps the model achieve better overall performance and robustness when deployed in real-world scenarios.
+
+### Model Evaluation
+Evaluation is performed on a fixed subset of the dataset using the averaged model. The evaluation script loads the model with the correct architecture and trained weights, sets it to evaluation mode, and applies it to images in batches. Predictions and ground truths are compared using two metrics: *classification accuracy* and *mean Area of Intersection* (AoI), a variant of *Intersection over Union* (IoU).
+
+Classification accuracy measures how often the predicted class matches the ground truth, given that the predicted and ground truth boxes overlap sufficiently (IoU > 0.5). Mean AoI quantifies the spatial alignment between predicted and ground truth bounding boxes, indicating how well the model localizes objects. These metrics provide insight into both the model’s detection and localization capabilities.
+
+### Implementation Notes and Recommendations
+The implementation of the Faster R-CNN pipeline incorporates several practical considerations to enhance training stability, performance, and generalization. The pretrained ResNet-50 backbone is kept unfrozen, allowing the entire network to be fine-tuned to the specific characteristics of the target dataset. However, in scenarios with limited data or training time, selectively freezing early convolutional layers can accelerate training and help reduce the risk of overfitting. To address occasional GPU memory overflows, which can occur with large or high-resolution images, the training loop includes safeguards that skip problematic batches and explicitly clear the CUDA cache as needed. This ensures training continues smoothly without manual intervention.
+
+Data augmentation is applied with care, as overly aggressive transformations can distort object geometry or semantics and negatively affect detection performance. To improve generalization, model averaging is applied across multiple cross-validation folds. This technique combines the weights of independently trained models, assuming the same architecture and training configuration, to produce a more stable and robust ensemble.
+
+Due to the high memory requirements of Faster R-CNN, especially with large input images and complex architectures, the batch size is limited to a small number such as four to remain within GPU constraints. Although small batches may introduce noise into gradient estimates, they are often necessary for such tasks. For evaluation, a subset of up to 300 images is used to balance computational efficiency and effectiveness. However, a more thorough assessment should include evaluation on the full validation set or an external test set. Overall, this pipeline represents a carefully designed approach to training and evaluating Faster R-CNN for road sign detection, incorporating best practices such as cross-validation, model checkpointing, and comprehensive metric tracking.
+
+## Fast API
 The main.py file is the entry point to an interactive web server built using FastAPI, which provides a simple interface for testing the trained models. This server exposes an endpoint that allows users to upload images from the TT100K dataset and receive predictions for both the bounding box location of traffic signs (localization) and their class labels (classification).
 
 When the server starts, it loads two pretrained models:
@@ -128,20 +158,28 @@ The response / result will show below, with the first bounding box showing the p
 
 
 ## Requirements
-All dependencies, including specific versions, are listed in the requirements.txt file. This ensures a consistent environment for training, evaluation, and deployment.
+The code is structered to run smoothly on python version 3.12.3, all other dependencies and libraries are listed in the requirements.txt file with the specific versions used. This ensures a consistent environment for training, evaluation, and deployment.
+To run the models or specific files, just write in your terminal 'python -m folder_name.file_name' and it should run smoothly.
 
 ## 📁 Project Structure
 ```bash
-├───data_storage # Stores the dataset, does not get pushed to the repository
-├───models  # Stores .pth
+├───data_storage # Stores the dataset, does get showcased in the repository
+├───models  # Stores the trained models as .pth
 ├───road_sign_detection
 │   ├───data
 │       ├───annotations.py
 │       ├───dataset_loader.py
 │       └───dataset_visualizer.py
-│   └───models
+│   ├───evaluation
+│       ├───evaluation_of_classification.py
+│       ├───evaluation_of_localization.py
+│   ├───models
 │       ├───classification_base_model.py
 │       └───localization_base_model.py
+│   └───training
+│       ├───train_classification_model.py
+│       ├───train_localization_model.py
+│       ├───train_faster_r_cnn_model.py
 ├───test
 │   ├───test_data
 │       ├───test_annotations.py
@@ -153,14 +191,8 @@ All dependencies, including specific versions, are listed in the requirements.tx
 ├───.gitattributes
 ├───.pre-commit-config.yaml
 ├───main.py
-├───evaluate_classification_model.py
-├───evaluation_of_classification.py
+├───demo.py
 ├───requirements.txt
-├───train_classification_model.py
-├───triain_faster_r_cnn_model.py
-├───training_template
-├───train_localization_model.py
-├───validation_of_localization.py
 ├───README.md
 ```
 ***Made by: Maurice Theo Meijer (s5480604), David van Wuijkhuijse(s5592968), Emily Heugen (s5587042), Yannick van Maanen (s5579082)***

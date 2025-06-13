@@ -1,4 +1,3 @@
-
 import streamlit as st
 import torch
 from PIL import Image, UnidentifiedImageError, ImageDraw
@@ -22,7 +21,6 @@ traffic_signs_pth = root + '/marks/'
 localization_model = BboxRegression()
 classification_model = CNNClassifier(number_of_classes=232)
 
-#localization_model.load_state_dict(torch.load("models/localization_model.pth", weights_only=True))
 localization_model.load_state_dict(torch.load("models/localization_model_final_ensemble.pth", weights_only=True))
 classification_model.load_state_dict(torch.load("models/classification_model.pth", weights_only=True))
 
@@ -44,7 +42,6 @@ preprocess_classification = transforms.Compose([
     transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
 ])
 
-# ---- Load annotations ----
 with open(annotations_pth, 'r') as f:
     annotations = json.load(f)
 
@@ -58,7 +55,6 @@ uploaded_file = st.file_uploader("Choose a .jpg traffic image", type=["jpg"])
 do_classify = st.checkbox("Also classify traffic signs", value=True)
 
 
-# ---- Helper Functions ----
 def draw_bounding_box(image: Image.Image, box: list[int], color: str = "red", width: int = 5) -> Image.Image:
     """
     Draw a single bounding box on a PIL image.
@@ -80,6 +76,7 @@ def draw_bounding_box(image: Image.Image, box: list[int], color: str = "red", wi
     draw.rectangle([x1, y1, x2, y2], outline=color, width=width)
     st.image(img_copy, caption="Original Image With Predicted Bounding Box", use_container_width=True)
 
+
 def demo_preprocessing(img: Image.Image, stage: str) -> None:
     """
     Shows preprocessing steps (grayscale + resize) in Streamlit.
@@ -92,7 +89,7 @@ def demo_preprocessing(img: Image.Image, stage: str) -> None:
         st.image(grayscale_image, caption="Grayscaled Image", use_container_width=True)
         resized_image = transforms.Resize((64, 64))(grayscale_image)
         st.image(resized_image, caption="Resized Grayscaled Image (224x224)", use_container_width=True)
-    
+
     if stage == "Classification":
         st.image(img, caption="Cropped Image", use_container_width=True)
         resized_img = transforms.Resize((32, 32))(img)
@@ -108,12 +105,12 @@ def predict_localization(raw_img: Image.Image, dataset_image: bool) -> list[list
     input_tensor = preprocess_classification(raw_img).unsqueeze(0).to(torch.float32)
     with torch.no_grad():
         bbox_percentages = localization_model(input_tensor).tolist()
-        
+
         # Override for testing
         bbox_percentages = [[0.4, 0.4, 0.5, 0.5]]
 
         predicted_bbox = None
-        
+
         # Convert percentage to pixels (Post Processing)
         for i in range(len(bbox_percentages)):
             x1 = int(bbox_percentages[i][0] * width)
@@ -130,12 +127,13 @@ def predict_localization(raw_img: Image.Image, dataset_image: bool) -> list[list
 
     # Override for testing
     predicted_bbox = [1038, 1028, 1137, 1148]
-    
+
     if predicted_bbox is not None:
         st.success(f"Predicted bounding boxes in pixels (xmin, ymin, xmax, ymax): {predicted_bbox}")
     else:
         st.error("Continue without predicted location")
     return predicted_bbox
+
 
 def predict_classifying(cropped_picture: Image.Image) -> str:
     """
@@ -150,6 +148,7 @@ def predict_classifying(cropped_picture: Image.Image) -> str:
 
         # Convert index to class labels (Post Processing)
         return sorted_classes[class_index]
+
 
 def show_classification_results(crop: Image.Image, predicted_class: str, ground_truth_class: str) -> None:
     """
@@ -195,7 +194,6 @@ def show_classification_results(crop: Image.Image, predicted_class: str, ground_
     st.markdown("---")
 
 
-# ---- Fallback if image is not in dataset ----
 def new_image_demo(image: Image.Image) -> None:
     """
     Handles images that are not present in the dataset annotations.
@@ -218,7 +216,7 @@ def new_image_demo(image: Image.Image) -> None:
 
     st.markdown("### Predicted Bounding Boxes")
     col1, col2 = st.columns(2)
-    
+
     predicted_sign = None
 
     with col1:
@@ -283,6 +281,6 @@ if uploaded_file is not None:
                 if do_classify:
                     predicted_class = predict_classifying(crop)
                     show_classification_results(crop, predicted_class, gt_class)
-                
+
     except UnidentifiedImageError:
         st.error("Invalid image. Please upload a valid .jpg file.")
