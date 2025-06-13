@@ -92,7 +92,7 @@ def demo_preprocessing(img: Image.Image, stage: str) -> None:
 
     if stage == "Classification":
         st.image(img, caption="Cropped Image", use_container_width=True)
-        resized_img = transforms.Resize((32, 32))(img)
+        resized_img = transforms.Resize((64, 64))(img)
         st.image(resized_img, caption="Resized Cropped Image (64x64)", use_container_width=True)
 
 
@@ -105,9 +105,6 @@ def predict_localization(raw_img: Image.Image, dataset_image: bool) -> list[list
     input_tensor = preprocess_classification(raw_img).unsqueeze(0).to(torch.float32)
     with torch.no_grad():
         bbox_percentages = localization_model(input_tensor).tolist()
-
-        # Override for testing
-        bbox_percentages = [[0.4, 0.4, 0.5, 0.5]]
 
         predicted_bbox = None
 
@@ -124,9 +121,6 @@ def predict_localization(raw_img: Image.Image, dataset_image: bool) -> list[list
                     st.stop()
             else:
                 predicted_bbox = [x1, y1, x2, y2]
-
-    # Override for testing
-    predicted_bbox = [1038, 1028, 1137, 1148]
 
     if predicted_bbox is not None:
         st.success(f"Predicted bounding boxes in pixels (xmin, ymin, xmax, ymax): {predicted_bbox}")
@@ -205,9 +199,6 @@ def new_image_demo(image: Image.Image) -> None:
 
     bbox = predict_localization(image, dataset_image=False)
 
-    # Override for testing
-    bbox = [1038, 1028, 1137, 1148]
-
     draw_bounding_box(image, bbox)
 
     cropped_img = image.crop(bbox)
@@ -252,7 +243,6 @@ if uploaded_file is not None:
         else:
             demo_preprocessing(raw_image, stage="Localization")
             predicted_box = predict_localization(raw_image, dataset_image=True)
-            #predicted_box = [[1000, 1000, 1200, 1200], [900, 900, 1000, 1000]]
 
             st.markdown("### Predicted vs. Ground Truth Bounding Boxes")
             col1, col2 = st.columns(2)
